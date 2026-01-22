@@ -14,7 +14,11 @@ import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as privateData from "../privateData.js";
 import type * as shared_auth_shared from "../shared/auth_shared.js";
+import type * as tables_todoAssignedUsers from "../tables/todoAssignedUsers.js";
 import type * as tables_todos from "../tables/todos.js";
+import type * as todos_functions from "../todos/functions.js";
+import type * as todos_index from "../todos/index.js";
+import type * as todos_types from "../todos/types.js";
 
 import type {
   ApiFromModules,
@@ -29,7 +33,11 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   privateData: typeof privateData;
   "shared/auth_shared": typeof shared_auth_shared;
+  "tables/todoAssignedUsers": typeof tables_todoAssignedUsers;
   "tables/todos": typeof tables_todos;
+  "todos/functions": typeof todos_functions;
+  "todos/index": typeof todos_index;
+  "todos/types": typeof todos_types;
 }>;
 
 /**

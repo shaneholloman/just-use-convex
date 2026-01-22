@@ -9,7 +9,7 @@ import {
   internalAction as baseInternalAction,
 } from "./_generated/server";
 import { entDefinitions } from "./schema";
-import { v, Infer } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 export const baseIdentity = v.object({
   userId: v.string(),
@@ -23,7 +23,7 @@ export const zQuery = zCustomQuery(baseQuery, {
   input: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     const parsedIdentity: Infer<typeof baseIdentity> = {
-      userId: identity?.userId as string,
+      userId: identity?.subject as string,
       activeOrganizationId: identity?.activeOrganizationId as string,
       activeTeamId: identity?.activeTeamId as string,
       organizationRole: identity?.organizationRole as string,
@@ -32,7 +32,7 @@ export const zQuery = zCustomQuery(baseQuery, {
       ctx: { ...ctx, table: entsTableFactory(ctx, entDefinitions), identity: parsedIdentity },
       args: {},
     }
-  },  
+  },
 });
 export const zInternalQuery = zCustomQuery(baseInternalQuery, {
   args: baseIdentity.fields,
@@ -47,7 +47,7 @@ export const zMutation = zCustomMutation(baseMutation, {
   input: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     const parsedIdentity: Infer<typeof baseIdentity> = {
-      userId: identity?.userId as string,
+      userId: identity?.subject as string,
       activeOrganizationId: identity?.activeOrganizationId as string,
       activeTeamId: identity?.activeTeamId as string,
       organizationRole: identity?.organizationRole as string,
@@ -73,7 +73,7 @@ export const zAction = zCustomAction(baseAction, {
   input: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     const parsedIdentity: Infer<typeof baseIdentity> = {
-      userId: identity?.userId as string,
+      userId: identity?.subject as string,
       activeOrganizationId: identity?.activeOrganizationId as string,
       activeTeamId: identity?.activeTeamId as string,
       organizationRole: identity?.organizationRole as string,
