@@ -13,7 +13,7 @@ export const Route = createFileRoute("/(protected)")({
 function ProtectedLayout() {
   return (
     <WorkspaceProvider>
-      <div className="flex-1 overflow-y-auto bg-background">
+      <div className="flex-1 overflow-y-auto bg-background h-full">
         <Outlet />
       </div>
     </WorkspaceProvider>
