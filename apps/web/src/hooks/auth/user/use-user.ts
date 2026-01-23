@@ -2,11 +2,15 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { authClient } from "@/lib/auth-client";
+import { useRefreshAuth } from "../use-refresh-auth";
+import { useNavigate } from "@tanstack/react-router";
 
 export function useUser() {
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user ?? null;
   const queryClient = useQueryClient();
+  const refreshAuth = useRefreshAuth();
+  const navigate = useNavigate();
 
   const updateMutation = useMutation({
     mutationFn: async (data: { name?: string; image?: string }) => {
@@ -53,9 +57,11 @@ export function useUser() {
       }
       return result.data;
     },
-    onSuccess: () => {
-      queryClient.clear();
-      window.location.href = "/auth";
+    onSuccess: async () => {
+      await refreshAuth();
+      navigate({
+        to: "/auth",
+      });
     },
     onError: (error: { message?: string }) => {
       toast.error(error.message || "Failed to sign out");
