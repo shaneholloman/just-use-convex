@@ -12,6 +12,12 @@ const zPaginationOpts = convexToZod(paginationOptsValidator);
 export const Todo = z.object(todosZodSchema);
 export const TodoWithSystemFields = z.object(todosWithSystemFields);
 
+// Inferred types from Zod schemas
+export const prioritySchema = todosZodSchema.priority;
+export const statusSchema = todosZodSchema.status;
+export type Priority = z.infer<typeof prioritySchema>;
+export type TodoStatus = z.infer<typeof statusSchema>;
+
 export const TodoAssignedUser = z.object(todoAssignedUsersZodSchema);
 export const TodoAssignedUserWithSystemFields = z.object(todoAssignedUsersWithSystemFields);
 

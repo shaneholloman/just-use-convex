@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTodos, useTodosList, useOrgStats, type Priority, type TodoStatus, type Todo, type TodoFilters } from "@/hooks/use-todos";
+import { useTodos, useTodosList, useOrgStats, type Todo, type TodoFilters } from "@/hooks/use-todos";
 import { useTeams } from "@/hooks/auth/organization/use-teams";
 import { useMembers } from "@/hooks/auth/organization/use-members";
 import { useUser } from "@/hooks/auth/user/use-user";
@@ -14,6 +14,8 @@ import {
   CalendarView,
   type ViewMode,
   type KanbanGroupBy,
+  type PriorityFilterValue,
+  type StatusFilterValue,
 } from "@/components/dashboard";
 
 export const Route = createFileRoute("/(protected)/dashboard")({
@@ -29,8 +31,8 @@ function RouteComponent() {
 
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [groupBy, setGroupBy] = useState<KanbanGroupBy>("status");
-  const [filterPriority, setFilterPriority] = useState<Priority | "all">("all");
-  const [filterStatus, setFilterStatus] = useState<TodoStatus | "all">("all");
+  const [filterPriority, setFilterPriority] = useState<PriorityFilterValue>("all");
+  const [filterStatus, setFilterStatus] = useState<StatusFilterValue>("all");
   const [filterTeamId, setFilterTeamId] = useState<string | "all">("all");
   const [filterMemberId, setFilterMemberId] = useState<string | "all">("all");
 

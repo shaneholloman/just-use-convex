@@ -7,20 +7,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Filter, X, LayoutGrid, List, Calendar } from "lucide-react";
-import type { Priority, TodoStatus } from "@/hooks/use-todos";
-import type { ViewMode, KanbanGroupBy } from "./constants";
-import type { Team } from "@/hooks/auth/organization/types";
-import type { Member } from "@/hooks/auth/organization/types";
+import type {
+  ViewMode,
+  KanbanGroupBy,
+  PriorityFilterValue,
+  StatusFilterValue,
+} from "./constants";
+import {
+  priorityFilterOptions,
+  statusFilterOptions,
+} from "./constants";
+import type { Team, Member } from "@/hooks/auth/organization/types";
 
 interface DashboardToolbarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   groupBy: KanbanGroupBy;
   onGroupByChange: (groupBy: KanbanGroupBy) => void;
-  filterPriority: Priority | "all";
-  onFilterPriorityChange: (priority: Priority | "all") => void;
-  filterStatus: TodoStatus | "all";
-  onFilterStatusChange: (status: TodoStatus | "all") => void;
+  filterPriority: PriorityFilterValue;
+  onFilterPriorityChange: (priority: PriorityFilterValue) => void;
+  filterStatus: StatusFilterValue;
+  onFilterStatusChange: (status: StatusFilterValue) => void;
   filterTeamId: string | "all";
   onFilterTeamIdChange: (teamId: string | "all") => void;
   filterMemberId: string | "all";
@@ -147,31 +154,37 @@ export function DashboardToolbar({
 
         <Select
           value={filterPriority}
-          onValueChange={(v) => onFilterPriorityChange(v as Priority | "all")}
+          onValueChange={(v) => onFilterPriorityChange(v as PriorityFilterValue)}
         >
-          <SelectTrigger className="w-28">
-            <SelectValue placeholder="Priority" />
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Priority">
+              {priorityFilterOptions.find((o) => o.value === filterPriority)?.label}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Priority</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
+            {priorityFilterOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         <Select
           value={filterStatus}
-          onValueChange={(v) => onFilterStatusChange(v as TodoStatus | "all")}
+          onValueChange={(v) => onFilterStatusChange(v as StatusFilterValue)}
         >
           <SelectTrigger className="w-32">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Status">
+              {statusFilterOptions.find((o) => o.value === filterStatus)?.label}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="todo">To Do</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="done">Done</SelectItem>
+            {statusFilterOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 

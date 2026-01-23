@@ -6,16 +6,11 @@ import type { Id } from "@better-convex/backend/convex/_generated/dataModel";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
 
-const todoKeys = {
-  all: ["todos"] as const,
-  list: (filters?: TodoFilters) => [...todoKeys.all, "list", filters] as const,
-  assigned: (userId?: string) => [...todoKeys.all, "assigned", userId] as const,
-};
+import type { Priority, TodoStatus } from "@better-convex/backend/convex/todos/types";
+export type { Priority, TodoStatus };
 
 type ListArgs = FunctionArgs<typeof api.todos.index.list>;
 export type TodoFilters = ListArgs["filters"];
-export type Priority = "low" | "medium" | "high";
-export type TodoStatus = "todo" | "in_progress" | "done";
 export type Todo = FunctionReturnType<typeof api.todos.index.list>["page"][number];
 
 const INITIAL_NUM_ITEMS = 20;

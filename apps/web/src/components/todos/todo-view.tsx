@@ -4,7 +4,7 @@ import { getInitials } from "@/hooks/auth/organization/utils";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback, AvatarGroup } from "@/components/ui/avatar";
 import { Calendar, Clock, User, Users } from "lucide-react";
-import { statusLabels, statusIcons, priorityColors } from "./constants";
+import { statusLabels, statusIcons, priorityColors } from "@/components/dashboard";
 
 interface TodoViewProps {
   todo: Todo;

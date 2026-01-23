@@ -15,19 +15,19 @@ const TITLE_TEXT = `
  ██████╔╝███████╗   ██║      ██║   ███████╗██║  ██║
  ╚═════╝ ╚══════╝   ╚═╝      ╚═╝   ╚══════╝╚═╝  ╚═╝
 
- ████████╗    ███████╗████████╗ █████╗  ██████╗██╗  ██╗
- ╚══██╔══╝    ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
-    ██║       ███████╗   ██║   ███████║██║     █████╔╝
-    ██║       ╚════██║   ██║   ██╔══██║██║     ██╔═██╗
-    ██║       ███████║   ██║   ██║  ██║╚██████╗██║  ██╗
-    ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+  ██████╗ ██████╗ ███╗   ██╗██╗   ██╗███████╗██╗  ██╗
+ ██╔════╝██╔═══██╗████╗  ██║██║   ██║██╔════╝╚██╗██╔╝
+ ██║     ██║   ██║██╔██╗ ██║██║   ██║█████╗   ╚███╔╝
+ ██║     ██║   ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝   ██╔██╗
+ ╚██████╗╚██████╔╝██║ ╚████║ ╚████╔╝ ███████╗██╔╝ ██╗
+  ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝
  `;
 
 function HomeComponent() {
   const healthCheck = useSuspenseQuery(convexQuery(api.healthCheck.get, {}));
 
   return (
-    <div className="container mx-auto flex max-w-3xl flex-col gap-2 p-2">
+    <div className="container mx-auto flex w-4xl flex-col gap-2 p-2">
       <pre className="overflow-x-auto font-mono text-sm">{TITLE_TEXT}</pre>
       <div className="flex flex-col gap-2">
         <section className="flex flex-col gap-1 rounded-lg border p-2">
