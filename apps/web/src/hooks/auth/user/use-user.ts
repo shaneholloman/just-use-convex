@@ -45,6 +45,23 @@ export function useUser() {
     },
   });
 
+  const signOutMutation = useMutation({
+    mutationFn: async () => {
+      const result = await authClient.signOut();
+      if (result.error) {
+        throw result.error;
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      window.location.href = "/auth";
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Failed to sign out");
+    },
+  });
+
   return {
     user,
     isPending,
@@ -52,5 +69,7 @@ export function useUser() {
     isUpdating: updateMutation.isPending,
     changePassword: changePasswordMutation.mutateAsync,
     isChangingPassword: changePasswordMutation.isPending,
+    signOut: signOutMutation.mutateAsync,
+    isSigningOut: signOutMutation.isPending,
   };
 }

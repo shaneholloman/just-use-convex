@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { CameraIcon } from "lucide-react";
+import { CameraIcon, LogOutIcon } from "lucide-react";
 
 import { useUser } from "@/hooks/auth/user";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/(protected)/settings/")({
 });
 
 function UserSettingsPage() {
-  const { user, isPending, updateUser, isUpdating, changePassword, isChangingPassword } = useUser();
+  const { user, isPending, updateUser, isUpdating, changePassword, isChangingPassword, signOut, isSigningOut } = useUser();
 
   const profileForm = useForm({
     defaultValues: {
@@ -320,6 +320,27 @@ function UserSettingsPage() {
               )}
             </passwordForm.Subscribe>
           </form>
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sign Out</CardTitle>
+          <CardDescription>
+            Sign out of your account on this device
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            onClick={() => signOut()}
+            disabled={isSigningOut}
+          >
+            <LogOutIcon className="mr-2 size-4" />
+            {isSigningOut ? "Signing out..." : "Sign Out"}
+          </Button>
         </CardContent>
       </Card>
     </div>
