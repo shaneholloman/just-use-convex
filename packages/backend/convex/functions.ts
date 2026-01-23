@@ -1,15 +1,30 @@
 import { entsTableFactory } from "convex-ents";
 import { zCustomAction, zCustomMutation, zCustomQuery, type ZCustomCtx } from "convex-helpers/server/zod4";
+import { customCtx, customMutation } from "convex-helpers/server/customFunctions";
+import { Triggers } from "convex-helpers/server/triggers";
 import {
-  internalMutation as baseInternalMutation,
+  internalMutation as rawInternalMutation,
   internalQuery as baseInternalQuery,
-  mutation as baseMutation,
+  mutation as rawMutation,
   query as baseQuery,
   action as baseAction,
   internalAction as baseInternalAction,
 } from "./_generated/server";
 import { entDefinitions } from "./schema";
+import type { DataModel } from "./_generated/dataModel";
 import { v, type Infer } from "convex/values";
+import { allTodoAggregates } from "./todos/aggregates";
+
+const triggers = new Triggers<DataModel>();
+
+// Register all aggregate triggers for todos table
+for (const aggregate of allTodoAggregates) {
+  triggers.register("todos", aggregate.trigger());
+}
+
+// Wrap base mutations with triggers
+const baseMutation = customMutation(rawMutation, customCtx(triggers.wrapDB));
+const baseInternalMutation = customMutation(rawInternalMutation, customCtx(triggers.wrapDB));
 
 export const baseIdentity = v.object({
   userId: v.string(),

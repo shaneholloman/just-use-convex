@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTodos, useTodosList, type Priority, type TodoStatus, type Todo, type TodoFilters } from "@/hooks/use-todos";
+import { useTodos, useTodosList, useOrgStats, type Priority, type TodoStatus, type Todo, type TodoFilters } from "@/hooks/use-todos";
 import { useTeams } from "@/hooks/auth/organization/use-teams";
 import { useMembers } from "@/hooks/auth/organization/use-members";
 import { TodoDialog } from "@/components/todos/todo-dialog";
@@ -23,6 +23,7 @@ function RouteComponent() {
   const { updateStatus, updatePriority } = useTodos();
   const { teams } = useTeams();
   const { members } = useMembers();
+  const orgStats = useOrgStats();
 
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [groupBy, setGroupBy] = useState<KanbanGroupBy>("status");
@@ -83,7 +84,7 @@ function RouteComponent() {
 
   return (
     <div className="flex flex-col gap-4 p-2 h-full">
-      <DashboardHeader todoCount={todos.length} onCreateClick={openCreateDialog} />
+      <DashboardHeader stats={orgStats.data} onCreateClick={openCreateDialog} />
 
       <DashboardToolbar
         viewMode={viewMode}

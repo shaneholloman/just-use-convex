@@ -1,5 +1,7 @@
 import * as functions from "./functions";
+import * as stats from "./stats";
 import * as types from "./types";
+import * as statsTypes from "./statsTypes";
 import { zMutation, zQuery } from "../functions";
 
 export const list = zQuery({
@@ -55,5 +57,30 @@ export const listAssigned = zQuery({
   args: types.ListAssignedTodosArgs,
   handler: async (ctx, args): Promise<ReturnType<typeof functions.ListAssignedTodos>> => {
     return await functions.ListAssignedTodos(ctx, args);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// STATS QUERIES
+// ═══════════════════════════════════════════════════════════════════
+
+export const getOrgStats = zQuery({
+  args: {},
+  handler: async (ctx): Promise<ReturnType<typeof stats.GetOrgStats>> => {
+    return await stats.GetOrgStats(ctx);
+  }
+});
+
+export const getTeamStats = zQuery({
+  args: statsTypes.TeamStatsArgs,
+  handler: async (ctx, args): Promise<ReturnType<typeof stats.GetTeamStats>> => {
+    return await stats.GetTeamStats(ctx, args);
+  }
+});
+
+export const getUserStats = zQuery({
+  args: statsTypes.UserStatsArgs,
+  handler: async (ctx, args): Promise<ReturnType<typeof stats.GetUserStats>> => {
+    return await stats.GetUserStats(ctx, args);
   }
 });

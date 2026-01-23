@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useConvexMutation, useConvexPaginatedQuery } from "@convex-dev/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useConvexMutation, useConvexPaginatedQuery, convexQuery } from "@convex-dev/react-query";
 import { api } from "@better-convex/backend/convex/_generated/api";
 import type { Id } from "@better-convex/backend/convex/_generated/dataModel";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
@@ -22,17 +22,10 @@ const INITIAL_NUM_ITEMS = 20;
 const EMPTY_FILTERS: TodoFilters = {};
 
 export function useTodos() {
-  const queryClient = useQueryClient();
-
-  const invalidateTodos = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: todoKeys.all });
-  }, [queryClient]);
-
   const createMutation = useMutation({
     mutationFn: useConvexMutation(api.todos.index.create),
     onSuccess: () => {
       toast.success("Todo created");
-      invalidateTodos();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create todo");
@@ -43,7 +36,6 @@ export function useTodos() {
     mutationFn: useConvexMutation(api.todos.index.update),
     onSuccess: () => {
       toast.success("Todo updated");
-      invalidateTodos();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update todo");
@@ -54,7 +46,6 @@ export function useTodos() {
     mutationFn: useConvexMutation(api.todos.index.deleteTodo),
     onSuccess: () => {
       toast.success("Todo deleted");
-      invalidateTodos();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete todo");
@@ -65,7 +56,6 @@ export function useTodos() {
     mutationFn: useConvexMutation(api.todos.index.assignUser),
     onSuccess: () => {
       toast.success("User assigned");
-      invalidateTodos();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to assign user");
@@ -76,7 +66,6 @@ export function useTodos() {
     mutationFn: useConvexMutation(api.todos.index.unassignUser),
     onSuccess: () => {
       toast.success("User unassigned");
-      invalidateTodos();
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to unassign user");
@@ -131,4 +120,10 @@ export function useAssignedTodosList(userId?: string) {
     { userId },
     { initialNumItems: INITIAL_NUM_ITEMS }
   );
+}
+
+export type OrgStats = FunctionReturnType<typeof api.todos.index.getOrgStats>
+
+export function useOrgStats() {
+  return useQuery(convexQuery(api.todos.index.getOrgStats, {}));
 }

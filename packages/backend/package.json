@@ -6,9 +6,11 @@
   "author": "",
   "scripts": {
     "dev": "convex dev",
-    "dev:setup": "convex dev --configure --until-success"
+    "dev:setup": "convex dev --configure --until-success",
+    "build": "tsc --noEmit --project convex"
   },
   "dependencies": {
+    "@convex-dev/aggregate": "^0.2.1",
     "@convex-dev/better-auth": "catalog:",
     "better-auth": "catalog:",
     "convex": "catalog:",

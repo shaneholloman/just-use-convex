@@ -1,18 +1,26 @@
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import type { OrgStats } from "@/hooks/use-todos";
 
 interface DashboardHeaderProps {
-  todoCount: number;
+  stats: OrgStats | undefined;
   onCreateClick: () => void;
 }
 
-export function DashboardHeader({ todoCount, onCreateClick }: DashboardHeaderProps) {
+export function DashboardHeader({ stats, onCreateClick }: DashboardHeaderProps) {
+  const total = stats?.total ?? 0;
+
   return (
     <div className="flex items-center justify-between">
       <div>
         <h1 className="text-2xl font-semibold">Todos</h1>
         <p className="text-muted-foreground text-sm">
-          {todoCount} {todoCount === 1 ? "task" : "tasks"}
+          {total} {total === 1 ? "task" : "tasks"}
+          {stats?.byStatus && (
+            <span className="ml-2">
+              ({stats.byStatus.done} done, {stats.byStatus.inProgress} in progress)
+            </span>
+          )}
         </p>
       </div>
       <Button onClick={onCreateClick}>
