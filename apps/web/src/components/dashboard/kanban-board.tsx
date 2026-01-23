@@ -48,7 +48,7 @@ export function KanbanBoard({
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 p-2">
-              <ScrollArea className="h-full max-h-[calc(100vh-320px)]">
+              <ScrollArea className="h-full max-h-[calc(100vh-128px)]">
                 <div className="flex flex-col gap-2 pr-2">
                   {columnTodos.length === 0 ? (
                     <p className="text-muted-foreground text-center py-8 text-xs">

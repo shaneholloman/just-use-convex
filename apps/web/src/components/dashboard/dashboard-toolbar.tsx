@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, X, LayoutGrid, List } from "lucide-react";
+import { Filter, X, LayoutGrid, List, Calendar } from "lucide-react";
 import type { Priority, TodoStatus } from "@/hooks/use-todos";
 import type { ViewMode, KanbanGroupBy } from "./constants";
 import type { Team } from "@/hooks/auth/organization/types";
@@ -57,6 +57,7 @@ export function DashboardToolbar({
           variant={viewMode === "kanban" ? "secondary" : "ghost"}
           size="icon-sm"
           onClick={() => onViewModeChange("kanban")}
+          title="Kanban view"
         >
           <LayoutGrid className="size-3.5" />
         </Button>
@@ -64,8 +65,17 @@ export function DashboardToolbar({
           variant={viewMode === "list" ? "secondary" : "ghost"}
           size="icon-sm"
           onClick={() => onViewModeChange("list")}
+          title="List view"
         >
           <List className="size-3.5" />
+        </Button>
+        <Button
+          variant={viewMode === "calendar" ? "secondary" : "ghost"}
+          size="icon-sm"
+          onClick={() => onViewModeChange("calendar")}
+          title="Calendar view"
+        >
+          <Calendar className="size-3.5" />
         </Button>
       </div>
 

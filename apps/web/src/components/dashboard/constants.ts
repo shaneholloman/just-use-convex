@@ -1,8 +1,9 @@
 import { Circle, CircleDot, CheckCircle2 } from "lucide-react";
 import type { Priority, TodoStatus, Todo } from "@/hooks/use-todos";
 
-export type ViewMode = "kanban" | "list";
+export type ViewMode = "kanban" | "list" | "calendar";
 export type KanbanGroupBy = "priority" | "status";
+export type CalendarViewMode = "month" | "week" | "day";
 
 export const priorityColors = {
   low: "secondary",

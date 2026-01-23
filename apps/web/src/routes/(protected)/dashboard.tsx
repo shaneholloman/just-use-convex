@@ -10,6 +10,7 @@ import {
   DashboardToolbar,
   KanbanBoard,
   TodoListView,
+  CalendarView,
   type ViewMode,
   type KanbanGroupBy,
 } from "@/components/dashboard";
@@ -81,7 +82,7 @@ function RouteComponent() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6 h-full">
+    <div className="flex flex-col gap-4 p-2 h-full">
       <DashboardHeader todoCount={todos.length} onCreateClick={openCreateDialog} />
 
       <DashboardToolbar
@@ -102,7 +103,7 @@ function RouteComponent() {
         onClearFilters={clearFilters}
       />
 
-      {viewMode === "kanban" ? (
+      {viewMode === "kanban" && (
         <KanbanBoard
           todos={todos}
           groupBy={groupBy}
@@ -110,11 +111,19 @@ function RouteComponent() {
           onStatusChange={updateStatus}
           onPriorityChange={updatePriority}
         />
-      ) : (
+      )}
+      {viewMode === "list" && (
         <TodoListView
           todos={todos}
           loadMore={todosQuery.loadMore}
           status={todosQuery.status}
+          onOpenTodo={openTodoDialog}
+          onStatusChange={updateStatus}
+        />
+      )}
+      {viewMode === "calendar" && (
+        <CalendarView
+          todos={todos}
           onOpenTodo={openTodoDialog}
           onStatusChange={updateStatus}
         />

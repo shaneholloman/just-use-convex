@@ -44,6 +44,19 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
         authConfig,
         jwks: process.env.JWKS,
         jwksRotateOnTokenGenerationError: true,
+        jwt: {
+          // Include session fields in the JWT payload so Convex can access them via getUserIdentity
+          definePayload: ({ user, session }) => ({
+            // User fields (standard)
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            // Session fields for organization context
+            activeOrganizationId: session.activeOrganizationId,
+            activeTeamId: session.activeTeamId,
+            organizationRole: session.organizationRole,
+          }),
+        },
       }),
       organization({
         ac,
@@ -55,8 +68,9 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
           enabled: true,
         },
         organizationHooks: {
-          afterCreateOrganization: async (_ctx) => {
-            // TODO: Add logic after organization creation
+          afterCreateOrganization: async ({ organization: _organization, member: _member, user: _user }) => {
+            // Session updates are handled by the session.update.before hook
+            // when setActive is called from the client
           },
           afterAddMember: async ({ member: _member, organization: _organization, user: _user }) => {
             // TODO: Add logic after member is added
@@ -198,15 +212,20 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
             );
 
             if (userResult) {
-              
-              // fetch the user member
-              const userMemberResult = await ctx.runQuery(
-                components.betterAuth.adapter.findOne,
-                {
-                  model: "member",
-                  where: [{ field: "userId", operator: "eq", value: userResult._id }],
-                }
-              );
+
+              // fetch the user member for the active organization
+              const userMemberResult = userResult.activeOrganizationId
+                ? await ctx.runQuery(
+                    components.betterAuth.adapter.findOne,
+                    {
+                      model: "member",
+                      where: [
+                        { field: "userId", operator: "eq", value: userResult._id },
+                        { field: "organizationId", operator: "eq", value: userResult.activeOrganizationId, connector: "AND" },
+                      ],
+                    }
+                  )
+                : null;
 
               const sessionData = {
                 ...session,
@@ -214,41 +233,77 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
                 activeTeamId: userResult.activeTeamId ?? null,
                 organizationRole: userMemberResult?.role ?? null,
               };
-
+              
               return { data: sessionData };
             }
             return { data: session };
           },
         },
         update: {
-          before: async (session) => {
-            // When session is updated (e.g., organization switch), enrich with member role
-            const activeOrgId = session.activeOrganizationId as string | undefined;
-            const userId = session.userId as string | undefined;
+          before: async (session, hookCtx) => {
+            // When activeOrganizationId changes (e.g., via setActive), update related fields
+            const activeOrgId = session.activeOrganizationId;
+            // The context structure is: context.session.session.userId or context.session.user.id
+            const context = hookCtx?.context as {
+              session?: {
+                session?: { userId?: string };
+                user?: { id?: string };
+              };
+            } | undefined;
+            const userId = context?.session?.session?.userId ?? context?.session?.user?.id;
 
-            if (activeOrgId && userId) {
-              const memberResult = await ctx.runQuery(
+            if (activeOrgId && typeof activeOrgId === "string" && userId) {
+              // Find the team for this organization
+              const team = await ctx.runQuery(
+                components.betterAuth.adapter.findOne,
+                {
+                  model: "team",
+                  where: [{ field: "organizationId", operator: "eq", value: activeOrgId }],
+                }
+              );
+
+              // Find the member role for this user in this organization
+              const member = await ctx.runQuery(
                 components.betterAuth.adapter.findOne,
                 {
                   model: "member",
                   where: [
-                    { field: "userId", operator: "eq", value: userId },
                     { field: "organizationId", operator: "eq", value: activeOrgId },
+                    { field: "userId", operator: "eq", value: userId, connector: "AND" },
                   ],
                 }
               );
 
+              // Persist the user's organization preference so it survives across sessions
+              if (isRunMutationCtx(ctx)) {
+                await ctx.runMutation(
+                  components.betterAuth.adapter.updateOne,
+                  {
+                    input: {
+                      model: "user",
+                      where: [{ field: "_id", operator: "eq", value: userId }],
+                      update: {
+                        activeOrganizationId: activeOrgId,
+                        activeTeamId: team?._id ?? null,
+                        updatedAt: Date.now(),
+                      },
+                    },
+                  }
+                );
+              }
+
               return {
                 data: {
                   ...session,
-                  organizationRole: memberResult?.role ?? null,
+                  activeTeamId: team?._id ?? null,
+                  organizationRole: member?.role ?? null,
                 },
               };
             }
 
             return { data: session };
           },
-        }
+        },
       },
     },
     user: {

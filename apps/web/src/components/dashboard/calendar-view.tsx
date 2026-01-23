@@ -1,0 +1,545 @@
+import { useState, useMemo } from "react";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  isToday,
+  addMonths,
+  subMonths,
+  addWeeks,
+  subWeeks,
+  addDays,
+  subDays,
+} from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { Todo, TodoStatus } from "@/hooks/use-todos";
+import type { Id } from "@better-convex/backend/convex/_generated/dataModel";
+import {
+  priorityColors,
+  statusIcons,
+  type CalendarViewMode,
+} from "./constants";
+import { cn } from "@/lib/utils";
+
+interface CalendarViewProps {
+  todos: Todo[];
+  onOpenTodo: (todo: Todo, mode?: "view" | "edit") => void;
+  onStatusChange: (id: Id<"todos">, status: TodoStatus) => void;
+}
+
+export function CalendarView({
+  todos,
+  onOpenTodo,
+  onStatusChange,
+}: CalendarViewProps) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarView, setCalendarView] = useState<CalendarViewMode>("month");
+
+  const navigate = (direction: "prev" | "next") => {
+    if (calendarView === "month") {
+      setCurrentDate(
+        direction === "next"
+          ? addMonths(currentDate, 1)
+          : subMonths(currentDate, 1)
+      );
+    } else if (calendarView === "week") {
+      setCurrentDate(
+        direction === "next"
+          ? addWeeks(currentDate, 1)
+          : subWeeks(currentDate, 1)
+      );
+    } else {
+      setCurrentDate(
+        direction === "next"
+          ? addDays(currentDate, 1)
+          : subDays(currentDate, 1)
+      );
+    }
+  };
+
+  const goToToday = () => setCurrentDate(new Date());
+
+  const getTitle = () => {
+    if (calendarView === "month") {
+      return format(currentDate, "MMMM yyyy");
+    } else if (calendarView === "week") {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+      if (weekStart.getMonth() === weekEnd.getMonth()) {
+        return `${format(weekStart, "MMM d")} - ${format(weekEnd, "d, yyyy")}`;
+      }
+      return `${format(weekStart, "MMM d")} - ${format(weekEnd, "MMM d, yyyy")}`;
+    }
+    return format(currentDate, "EEEE, MMMM d, yyyy");
+  };
+
+  return (
+    <div className="flex flex-col gap-4 h-full min-h-0">
+      {/* Calendar Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={goToToday}>
+            Today
+          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => navigate("prev")}
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => navigate("next")}
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+          <h2 className="text-lg font-semibold">{getTitle()}</h2>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-1 border rounded-md p-0.5">
+          <Button
+            variant={calendarView === "month" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setCalendarView("month")}
+          >
+            Month
+          </Button>
+          <Button
+            variant={calendarView === "week" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setCalendarView("week")}
+          >
+            Week
+          </Button>
+          <Button
+            variant={calendarView === "day" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setCalendarView("day")}
+          >
+            Day
+          </Button>
+        </div>
+      </div>
+
+      {/* Calendar Content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {calendarView === "month" && (
+          <MonthView
+            currentDate={currentDate}
+            todos={todos}
+            onOpenTodo={onOpenTodo}
+            onDateClick={(date) => {
+              setCurrentDate(date);
+              setCalendarView("day");
+            }}
+          />
+        )}
+        {calendarView === "week" && (
+          <WeekView
+            currentDate={currentDate}
+            todos={todos}
+            onOpenTodo={onOpenTodo}
+            onDateClick={(date) => {
+              setCurrentDate(date);
+              setCalendarView("day");
+            }}
+          />
+        )}
+        {calendarView === "day" && (
+          <DayView
+            currentDate={currentDate}
+            todos={todos}
+            onOpenTodo={onOpenTodo}
+            onStatusChange={onStatusChange}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface MonthViewProps {
+  currentDate: Date;
+  todos: Todo[];
+  onOpenTodo: (todo: Todo, mode?: "view" | "edit") => void;
+  onDateClick: (date: Date) => void;
+}
+
+function MonthView({
+  currentDate,
+  todos,
+  onOpenTodo,
+  onDateClick,
+}: MonthViewProps) {
+  const days = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  }, [currentDate]);
+
+  const todosByDate = useMemo(() => {
+    const map = new Map<string, Todo[]>();
+    todos.forEach((todo) => {
+      if (todo.dueDate) {
+        const dateKey = format(new Date(todo.dueDate), "yyyy-MM-dd");
+        const existing = map.get(dateKey) || [];
+        map.set(dateKey, [...existing, todo]);
+      }
+    });
+    return map;
+  }, [todos]);
+
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Weekday Headers */}
+      <div className="grid grid-cols-7 border-b shrink-0">
+        {weekdays.map((day) => (
+          <div
+            key={day}
+            className="py-2 text-center text-sm font-medium text-muted-foreground"
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar Grid */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="grid grid-cols-7 auto-rows-fr">
+          {days.map((day) => {
+            const dateKey = format(day, "yyyy-MM-dd");
+            const dayTodos = todosByDate.get(dateKey) || [];
+            const isCurrentMonth = isSameMonth(day, currentDate);
+
+            return (
+              <div
+                key={dateKey}
+                className={cn(
+                  "border-b border-r p-1 min-h-24 cursor-pointer hover:bg-muted/50 transition-colors",
+                  !isCurrentMonth && "bg-muted/20"
+                )}
+                onClick={() => onDateClick(day)}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span
+                    className={cn(
+                      "text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full",
+                      isToday(day) && "bg-primary text-primary-foreground",
+                      !isCurrentMonth && "text-muted-foreground"
+                    )}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  {dayTodos.length > 3 && (
+                    <span className="text-xs text-muted-foreground">
+                      +{dayTodos.length - 3}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-0.5 overflow-hidden">
+                  {dayTodos.slice(0, 3).map((todo) => (
+                    <CalendarTodoItem
+                      key={todo._id}
+                      todo={todo}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenTodo(todo);
+                      }}
+                      compact
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+interface WeekViewProps {
+  currentDate: Date;
+  todos: Todo[];
+  onOpenTodo: (todo: Todo, mode?: "view" | "edit") => void;
+  onDateClick: (date: Date) => void;
+}
+
+function WeekView({
+  currentDate,
+  todos,
+  onOpenTodo,
+  onDateClick,
+}: WeekViewProps) {
+  const days = useMemo(() => {
+    const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+    return eachDayOfInterval({ start: weekStart, end: weekEnd });
+  }, [currentDate]);
+
+  const todosByDate = useMemo(() => {
+    const map = new Map<string, Todo[]>();
+    todos.forEach((todo) => {
+      if (todo.dueDate) {
+        const dateKey = format(new Date(todo.dueDate), "yyyy-MM-dd");
+        const existing = map.get(dateKey) || [];
+        map.set(dateKey, [...existing, todo]);
+      }
+    });
+    return map;
+  }, [todos]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Day Headers */}
+      <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b shrink-0">
+        <div className="py-2" />
+        {days.map((day) => (
+          <div
+            key={format(day, "yyyy-MM-dd")}
+            className={cn(
+              "py-2 text-center border-l cursor-pointer hover:bg-muted/50 transition-colors",
+              isToday(day) && "bg-primary/5"
+            )}
+            onClick={() => onDateClick(day)}
+          >
+            <div className="text-sm text-muted-foreground">
+              {format(day, "EEE")}
+            </div>
+            <div
+              className={cn(
+                "text-lg font-semibold w-10 h-10 mx-auto flex items-center justify-center rounded-full",
+                isToday(day) && "bg-primary text-primary-foreground"
+              )}
+            >
+              {format(day, "d")}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* All-day Events */}
+      <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b shrink-0">
+        <div className="py-2 text-xs text-muted-foreground text-right pr-2">
+          All day
+        </div>
+        {days.map((day) => {
+          const dateKey = format(day, "yyyy-MM-dd");
+          const dayTodos = todosByDate.get(dateKey) || [];
+          return (
+            <ScrollArea
+              key={dateKey}
+              className="border-l p-1 min-h-12 max-h-24"
+            >
+              <div className="space-y-0.5">
+                {dayTodos.map((todo) => (
+                  <CalendarTodoItem
+                    key={todo._id}
+                    todo={todo}
+                    onClick={() => onOpenTodo(todo)}
+                    compact
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          );
+        })}
+      </div>
+
+      {/* Time Grid */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="grid grid-cols-[60px_repeat(7,1fr)]">
+          {hours.map((hour) => (
+            <div key={hour} className="contents">
+              <div className="h-12 text-xs text-muted-foreground text-right pr-2 -mt-2">
+                {hour === 0 ? "" : format(new Date().setHours(hour, 0), "h a")}
+              </div>
+              {days.map((day) => (
+                <div
+                  key={`${format(day, "yyyy-MM-dd")}-${hour}`}
+                  className="h-12 border-l border-t hover:bg-muted/30 transition-colors"
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+interface DayViewProps {
+  currentDate: Date;
+  todos: Todo[];
+  onOpenTodo: (todo: Todo, mode?: "view" | "edit") => void;
+  onStatusChange: (id: Id<"todos">, status: TodoStatus) => void;
+}
+
+function DayView({
+  currentDate,
+  todos,
+  onOpenTodo,
+  onStatusChange,
+}: DayViewProps) {
+  const dayTodos = useMemo(() => {
+    return todos.filter((todo) => {
+      if (!todo.dueDate) return false;
+      return isSameDay(new Date(todo.dueDate), currentDate);
+    });
+  }, [todos, currentDate]);
+
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* All-day Events */}
+      <div className="flex border-b shrink-0 max-h-48">
+        <div className="w-16 py-2 text-xs text-muted-foreground text-right pr-2 shrink-0">
+          All day
+        </div>
+        <ScrollArea className="flex-1 min-h-16 border-l">
+          <div className="p-2 space-y-1">
+            {dayTodos.length > 0 ? (
+              dayTodos.map((todo) => (
+                <CalendarTodoItem
+                  key={todo._id}
+                  todo={todo}
+                  onClick={() => onOpenTodo(todo)}
+                  onStatusChange={onStatusChange}
+                />
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground py-2">
+                No tasks scheduled for this day
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Time Grid */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="flex flex-col">
+          {hours.map((hour) => (
+            <div key={hour} className="flex h-14">
+              <div className="w-16 text-xs text-muted-foreground text-right pr-2 -mt-2 shrink-0">
+                {hour === 0 ? "" : format(new Date().setHours(hour, 0), "h a")}
+              </div>
+              <div className="flex-1 border-t border-l hover:bg-muted/30 transition-colors" />
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+interface CalendarTodoItemProps {
+  todo: Todo;
+  onClick: (e: React.MouseEvent) => void;
+  onStatusChange?: (id: Id<"todos">, status: TodoStatus) => void;
+  compact?: boolean;
+}
+
+function CalendarTodoItem({
+  todo,
+  onClick,
+  onStatusChange,
+  compact,
+}: CalendarTodoItemProps) {
+  const status = todo.status ?? "todo";
+  const priority = todo.priority ?? "medium";
+  const StatusIcon = statusIcons[status];
+
+  const priorityBgColors = {
+    high: "bg-red-500/10 border-red-500/30 hover:bg-red-500/20",
+    medium: "bg-yellow-500/10 border-yellow-500/30 hover:bg-yellow-500/20",
+    low: "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20",
+  };
+
+  if (compact) {
+    return (
+      <button
+        onClick={onClick}
+        className={cn(
+          "w-full text-left text-xs px-1.5 py-0.5 rounded border truncate transition-colors",
+          priorityBgColors[priority],
+          status === "done" && "line-through opacity-60"
+        )}
+      >
+        {todo.title}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors",
+        priorityBgColors[priority]
+      )}
+    >
+      {onStatusChange && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const nextStatus =
+              status === "todo"
+                ? "in_progress"
+                : status === "in_progress"
+                  ? "done"
+                  : "todo";
+            onStatusChange(todo._id, nextStatus);
+          }}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <StatusIcon
+            className={cn(
+              "size-4",
+              status === "done" && "text-green-500",
+              status === "in_progress" && "text-blue-500"
+            )}
+          />
+        </button>
+      )}
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            "font-medium text-sm truncate",
+            status === "done" && "line-through text-muted-foreground"
+          )}
+        >
+          {todo.title}
+        </p>
+        {todo.description && (
+          <p className="text-muted-foreground text-xs truncate">
+            {todo.description}
+          </p>
+        )}
+      </div>
+      <Badge variant={priorityColors[priority]} className="text-[10px] shrink-0">
+        {priority}
+      </Badge>
+    </div>
+  );
+}

@@ -28,7 +28,7 @@ function RouteComponent() {
           <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>{label}</TabsTrigger>
         ))}
       </TabsList>
-      <div className="border border-border rounded-lg p-2 h-full">
+      <div className="border border-border rounded-xl p-2 h-full">
         <Outlet />
       </div>
     </Tabs>
