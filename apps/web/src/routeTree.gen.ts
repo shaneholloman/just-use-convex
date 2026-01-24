@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as DocsRouteRouteImport } from './routes/docs/route'
 import { Route as publicRouteRouteImport } from './routes/(public)/route'
 import { Route as protectedRouteRouteImport } from './routes/(protected)/route'
 import { Route as publicIndexRouteImport } from './routes/(public)/index'
@@ -24,6 +25,11 @@ import { Route as protectedSettingsOrganizationIndexRouteImport } from './routes
 import { Route as protectedSettingsOrganizationTeamsRouteImport } from './routes/(protected)/settings/organization/teams'
 import { Route as protectedSettingsOrganizationMembersRouteImport } from './routes/(protected)/settings/organization/members'
 
+const DocsRouteRoute = DocsRouteRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const publicRouteRoute = publicRouteRouteImport.update({
   id: '/(public)',
   getParentRoute: () => rootRouteImport,
@@ -38,9 +44,9 @@ const publicIndexRoute = publicIndexRouteImport.update({
   getParentRoute: () => publicRouteRoute,
 } as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
-  id: '/docs/$',
-  path: '/docs/$',
-  getParentRoute: () => rootRouteImport,
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRouteRoute,
 } as any)
 const ApiSearchRoute = ApiSearchRouteImport.update({
   id: '/api/search',
@@ -98,6 +104,7 @@ const protectedSettingsOrganizationMembersRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/docs': typeof DocsRouteRouteWithChildren
   '/settings': typeof protectedSettingsRouteRouteWithChildren
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
 }
 export interface FileRoutesByTo {
+  '/docs': typeof DocsRouteRouteWithChildren
   '/dashboard': typeof protectedDashboardRoute
   '/auth': typeof publicAuthRoute
   '/api/search': typeof ApiSearchRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/(protected)': typeof protectedRouteRouteWithChildren
   '/(public)': typeof publicRouteRouteWithChildren
+  '/docs': typeof DocsRouteRouteWithChildren
   '/(protected)/settings': typeof protectedSettingsRouteRouteWithChildren
   '/(protected)/dashboard': typeof protectedDashboardRoute
   '/(public)/auth': typeof publicAuthRoute
@@ -143,6 +152,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/docs'
     | '/settings'
     | '/dashboard'
     | '/auth'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/settings/organization/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/docs'
     | '/dashboard'
     | '/auth'
     | '/api/search'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/(protected)'
     | '/(public)'
+    | '/docs'
     | '/(protected)/settings'
     | '/(protected)/dashboard'
     | '/(public)/auth'
@@ -188,13 +200,20 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   protectedRouteRoute: typeof protectedRouteRouteWithChildren
   publicRouteRoute: typeof publicRouteRouteWithChildren
+  DocsRouteRoute: typeof DocsRouteRouteWithChildren
   ApiSearchRoute: typeof ApiSearchRoute
-  DocsSplatRoute: typeof DocsSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(public)': {
       id: '/(public)'
       path: ''
@@ -218,10 +237,10 @@ declare module '@tanstack/react-router' {
     }
     '/docs/$': {
       id: '/docs/$'
-      path: '/docs/$'
+      path: '/$'
       fullPath: '/docs/$'
       preLoaderRoute: typeof DocsSplatRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof DocsRouteRoute
     }
     '/api/search': {
       id: '/api/search'
@@ -362,11 +381,23 @@ const publicRouteRouteWithChildren = publicRouteRoute._addFileChildren(
   publicRouteRouteChildren,
 )
 
+interface DocsRouteRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+}
+
+const DocsRouteRouteChildren: DocsRouteRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+}
+
+const DocsRouteRouteWithChildren = DocsRouteRoute._addFileChildren(
+  DocsRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   protectedRouteRoute: protectedRouteRouteWithChildren,
   publicRouteRoute: publicRouteRouteWithChildren,
+  DocsRouteRoute: DocsRouteRouteWithChildren,
   ApiSearchRoute: ApiSearchRoute,
-  DocsSplatRoute: DocsSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

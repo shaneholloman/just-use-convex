@@ -15,7 +15,7 @@ export default function Header() {
   return (
     <Tabs
       defaultValue={location.pathname.split('/').pop()}
-      className="container mx-auto w-4xl border border-border rounded-lg mt-2 px-.5 overflow-x-auto no-scrollbar"
+      className="container mx-auto w-4xl border border-border rounded-lg mt-2 px-.5 overflow-x-auto no-scrollbar z-50"
     >
       <TabsList variant="line" className={`w-full justify-between`}>
         {links.map(({ to, label }) => (

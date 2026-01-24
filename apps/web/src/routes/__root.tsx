@@ -16,7 +16,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
 import { seo } from '@/utils/seo'
-import { RootProvider } from 'fumadocs-ui/provider/tanstack';
 
 import Header from "../components/header";
 import { env } from "@better-convex/env/web";
@@ -100,12 +99,8 @@ function RootDocument() {
         </head>
         <body>
           <div className="grid h-svh grid-rows-[auto_1fr]">
-            <div className="relative z-50">
-              <Header />
-            </div>
-            <RootProvider>
-              <Outlet />
-            </RootProvider>
+            <Header />
+            <Outlet />
           </div>
           <Toaster richColors />
           <TanStackRouterDevtools position="bottom-left" />
