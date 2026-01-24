@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   format,
   startOfMonth,
@@ -15,6 +15,8 @@ import {
   subWeeks,
   addDays,
   subDays,
+  startOfDay,
+  endOfDay,
 } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,19 +31,53 @@ import {
 } from "./constants";
 import { cn } from "@/lib/utils";
 
+export interface DateRange {
+  from: number;
+  to: number;
+}
+
 interface CalendarViewProps {
   todos: Todo[];
   onOpenTodo: (todo: Todo, mode?: "view" | "edit") => void;
   onStatusChange: (id: Id<"todos">, status: TodoStatus) => void;
+  onDateRangeChange?: (range: DateRange) => void;
 }
 
 export function CalendarView({
   todos,
   onOpenTodo,
   onStatusChange,
+  onDateRangeChange,
 }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<CalendarViewMode>("month");
+
+  // Calculate and emit date range whenever currentDate or calendarView changes
+  useEffect(() => {
+    if (!onDateRangeChange) return;
+
+    let rangeStart: Date;
+    let rangeEnd: Date;
+
+    if (calendarView === "month") {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = endOfMonth(currentDate);
+      // Include full weeks that overlap with the month
+      rangeStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+      rangeEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+    } else if (calendarView === "week") {
+      rangeStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      rangeEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+    } else {
+      rangeStart = startOfDay(currentDate);
+      rangeEnd = endOfDay(currentDate);
+    }
+
+    onDateRangeChange({
+      from: rangeStart.getTime(),
+      to: rangeEnd.getTime(),
+    });
+  }, [currentDate, calendarView, onDateRangeChange]);
 
   const navigate = (direction: "prev" | "next") => {
     if (calendarView === "month") {
@@ -407,7 +443,34 @@ function DayView({
     });
   }, [todos, currentDate]);
 
+  // Separate all-day and timed todos
+  const { allDayTodos, timedTodos } = useMemo(() => {
+    const allDay: Todo[] = [];
+    const timed: Todo[] = [];
+    dayTodos.forEach((todo) => {
+      if (todo.startTime && todo.endTime) {
+        timed.push(todo);
+      } else {
+        allDay.push(todo);
+      }
+    });
+    return { allDayTodos: allDay, timedTodos: timed };
+  }, [dayTodos]);
+
   const hours = Array.from({ length: 24 }, (_, i) => i);
+  const hourHeight = 56; // 14 * 4 = 56px (h-14)
+
+  // Calculate position and height for a timed todo
+  const getTodoPosition = (todo: Todo) => {
+    if (!todo.startTime || !todo.endTime) return null;
+    const startDate = new Date(todo.startTime);
+    const endDate = new Date(todo.endTime);
+    const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+    const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+    const top = (startMinutes / 60) * hourHeight;
+    const height = Math.max(((endMinutes - startMinutes) / 60) * hourHeight, 24);
+    return { top, height };
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -418,8 +481,8 @@ function DayView({
         </div>
         <ScrollArea className="flex-1 min-h-16 border-l">
           <div className="p-2 space-y-1">
-            {dayTodos.length > 0 ? (
-              dayTodos.map((todo) => (
+            {allDayTodos.length > 0 ? (
+              allDayTodos.map((todo) => (
                 <CalendarTodoItem
                   key={todo._id}
                   todo={todo}
@@ -429,7 +492,7 @@ function DayView({
               ))
             ) : (
               <div className="text-sm text-muted-foreground py-2">
-                No tasks scheduled for this day
+                No all-day tasks
               </div>
             )}
           </div>
@@ -438,7 +501,8 @@ function DayView({
 
       {/* Time Grid */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="flex flex-col">
+        <div className="flex flex-col relative">
+          {/* Hour grid lines */}
           {hours.map((hour) => (
             <div key={hour} className="flex h-14">
               <div className="w-16 text-xs text-muted-foreground text-right pr-2 -mt-2 shrink-0">
@@ -447,6 +511,29 @@ function DayView({
               <div className="flex-1 border-t border-l hover:bg-muted/30 transition-colors" />
             </div>
           ))}
+          {/* Timed todos overlay */}
+          <div className="absolute left-16 right-0 top-0 bottom-0 pointer-events-none">
+            {timedTodos.map((todo) => {
+              const pos = getTodoPosition(todo);
+              if (!pos) return null;
+              const startDate = new Date(todo.startTime!);
+              const endDate = new Date(todo.endTime!);
+              return (
+                <div
+                  key={todo._id}
+                  className="absolute left-1 right-1 pointer-events-auto"
+                  style={{ top: pos.top, height: pos.height }}
+                >
+                  <CalendarTodoItem
+                    todo={todo}
+                    onClick={() => onOpenTodo(todo)}
+                    onStatusChange={onStatusChange}
+                    timeLabel={`${format(startDate, "h:mm a")} - ${format(endDate, "h:mm a")}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </ScrollArea>
     </div>
@@ -458,6 +545,7 @@ interface CalendarTodoItemProps {
   onClick: (e: React.MouseEvent) => void;
   onStatusChange?: (id: Id<"todos">, status: TodoStatus) => void;
   compact?: boolean;
+  timeLabel?: string;
 }
 
 function CalendarTodoItem({
@@ -465,6 +553,7 @@ function CalendarTodoItem({
   onClick,
   onStatusChange,
   compact,
+  timeLabel,
 }: CalendarTodoItemProps) {
   const status = todo.status ?? "todo";
   const priority = todo.priority ?? "medium";
@@ -531,7 +620,12 @@ function CalendarTodoItem({
         >
           {todo.title}
         </p>
-        {todo.description && (
+        {timeLabel && (
+          <p className="text-muted-foreground text-xs">
+            {timeLabel}
+          </p>
+        )}
+        {todo.description && !timeLabel && (
           <p className="text-muted-foreground text-xs truncate">
             {todo.description}
           </p>

@@ -35,6 +35,8 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
   const [priority, setPriority] = useState<Priority>(todo?.priority ?? "medium");
   const [status, setStatus] = useState<TodoStatus>(todo?.status ?? "todo");
   const [dueDate, setDueDate] = useState(todo?.dueDate ? new Date(todo.dueDate).toISOString().split("T")[0] : "");
+  const [startTime, setStartTime] = useState(todo?.startTime ? new Date(todo.startTime).toTimeString().slice(0, 5) : "");
+  const [endTime, setEndTime] = useState(todo?.endTime ? new Date(todo.endTime).toTimeString().slice(0, 5) : "");
   const [teamId, setTeamId] = useState<string | undefined>(todo?.teamId);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
   const [initialAssignedUserIds, setInitialAssignedUserIds] = useState<string[]>([]);
@@ -65,6 +67,8 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
       setPriority(todo?.priority ?? "medium");
       setStatus(todo?.status ?? "todo");
       setDueDate(todo?.dueDate ? new Date(todo.dueDate).toISOString().split("T")[0] : "");
+      setStartTime(todo?.startTime ? new Date(todo.startTime).toTimeString().slice(0, 5) : "");
+      setEndTime(todo?.endTime ? new Date(todo.endTime).toTimeString().slice(0, 5) : "");
       setTeamId(todo?.teamId);
       // Initialize assigned user IDs from fetched todo with assignees
       const userIds = todoWithAssignees?.assignedUsers?.map((a) => a.userId) ?? [];
@@ -72,6 +76,15 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
       setInitialAssignedUserIds(userIds);
     }
   }, [todo, open, todoWithAssignees]);
+
+  // Helper to convert time string (HH:MM) to timestamp using dueDate as the date
+  const timeToTimestamp = (time: string): number | undefined => {
+    if (!time || !dueDate) return undefined;
+    const [hours, minutes] = time.split(":").map(Number);
+    const date = new Date(dueDate);
+    date.setHours(hours, minutes, 0, 0);
+    return date.getTime();
+  };
 
   const handleSave = async () => {
     if (!title.trim()) return;
@@ -84,6 +97,8 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
           priority,
           status,
           dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
+          startTime: timeToTimestamp(startTime),
+          endTime: timeToTimestamp(endTime),
           teamId: teamId || undefined,
         },
       });
@@ -99,7 +114,9 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
           description: description.trim() || undefined,
           priority,
           status,
-          dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
+          dueDate: dueDate ? new Date(dueDate).getTime() : null,
+          startTime: timeToTimestamp(startTime) ?? null,
+          endTime: timeToTimestamp(endTime) ?? null,
           teamId: teamId || undefined,
         },
       });
@@ -159,6 +176,10 @@ export function TodoDialog({ todo, open, onOpenChange, mode, onModeChange }: Tod
               onPriorityChange={setPriority}
               dueDate={dueDate}
               onDueDateChange={setDueDate}
+              startTime={startTime}
+              onStartTimeChange={setStartTime}
+              endTime={endTime}
+              onEndTimeChange={setEndTime}
               teamId={teamId}
               onTeamIdChange={setTeamId}
               assignedUserIds={assignedUserIds}

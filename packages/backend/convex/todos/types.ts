@@ -29,6 +29,8 @@ const TodoFilters = z.object({
   description: z.string(),
   status: z.enum(["todo", "in_progress", "done"]),
   dueDate: z.number(),
+  dueDateFrom: z.number(),
+  dueDateTo: z.number(),
   priority: z.enum(["low", "medium", "high"]),
   updatedAt: z.number(),
   assignedUserId: z.string(),

@@ -1,13 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useVirtualizer, type VirtualizerOptions } from "@tanstack/react-virtual";
-
-type PaginatedQueryStatus = "LoadingFirstPage" | "LoadingMore" | "CanLoadMore" | "Exhausted";
-
-type PaginatedQueryResult<T> = {
-  results: T[];
-  loadMore: (numItems: number) => void;
-  status: PaginatedQueryStatus;
-};
+import type { PaginatedQueryResult } from "./use-paginated-query";
 
 type UseVirtualPaginatedListOptions<T> = {
   query: PaginatedQueryResult<T>;
@@ -78,4 +71,5 @@ export function useVirtualPaginatedList<T>({
   };
 }
 
-export type { PaginatedQueryResult, UseVirtualPaginatedListOptions };
+export type { PaginatedQueryResult, PaginationStatus } from "./use-paginated-query";
+export type { UseVirtualPaginatedListOptions };

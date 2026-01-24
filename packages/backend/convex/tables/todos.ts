@@ -10,7 +10,9 @@ export const todosZodSchema = {
   title: z.string(),
   description: z.string().optional(),
   status: z.enum(["todo", "in_progress", "done"]).default("todo"),
-  dueDate: z.number().optional(),
+  dueDate: z.number().nullable().optional(),
+  startTime: z.number().nullable().optional(),
+  endTime: z.number().nullable().optional(),
   priority: z.enum(["low", "medium", "high"]).default("medium"),
   updatedAt: z.number(),
 };

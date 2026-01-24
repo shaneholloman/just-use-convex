@@ -23,6 +23,12 @@ async function runTodosQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs
       if (args.filters.dueDate !== undefined) {
         conditions.push(q.lte(q.field("dueDate"), args.filters.dueDate));
       }
+      if (args.filters.dueDateFrom !== undefined) {
+        conditions.push(q.gte(q.field("dueDate"), args.filters.dueDateFrom));
+      }
+      if (args.filters.dueDateTo !== undefined) {
+        conditions.push(q.lte(q.field("dueDate"), args.filters.dueDateTo));
+      }
       if (args.filters.updatedAt !== undefined) {
         conditions.push(q.gte(q.field("updatedAt"), args.filters.updatedAt));
       }
@@ -103,7 +109,31 @@ export async function UpdateTodo(ctx: zMutationCtx, args: z.infer<typeof types.U
   if (todo.organizationId !== ctx.identity.activeOrganizationId) {
     throw new Error("You are not authorized to update this todo");
   }
-  await todo.patch(args.patch);
+
+  // Separate fields to set vs unset (null means unset)
+  const fieldsToUnset: string[] = [];
+  const patchData: Record<string, unknown> = { updatedAt: Date.now() };
+
+  for (const [key, value] of Object.entries(args.patch)) {
+    if (value === null) {
+      fieldsToUnset.push(key);
+    } else if (value !== undefined) {
+      patchData[key] = value;
+    }
+  }
+
+  // Apply the patch for non-null values
+  await todo.patch(patchData);
+
+  // Unset fields that were explicitly set to null
+  if (fieldsToUnset.length > 0) {
+    const unsetPatch: Record<string, undefined> = {};
+    for (const field of fieldsToUnset) {
+      unsetPatch[field] = undefined;
+    }
+    await ctx.db.patch(todo._id, unsetPatch);
+  }
+
   return todo;
 }
 

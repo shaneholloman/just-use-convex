@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { TodoMemberSelect } from "./todo-member-select";
 
 interface TodoFormProps {
@@ -24,6 +25,10 @@ interface TodoFormProps {
   onPriorityChange: (value: Priority) => void;
   dueDate: string;
   onDueDateChange: (value: string) => void;
+  startTime: string;
+  onStartTimeChange: (value: string) => void;
+  endTime: string;
+  onEndTimeChange: (value: string) => void;
   teamId: string | undefined;
   onTeamIdChange: (value: string | undefined) => void;
   assignedUserIds: string[];
@@ -43,6 +48,10 @@ export function TodoForm({
   onPriorityChange,
   dueDate,
   onDueDateChange,
+  startTime,
+  onStartTimeChange,
+  endTime,
+  onEndTimeChange,
   teamId,
   onTeamIdChange,
   assignedUserIds,
@@ -111,6 +120,40 @@ export function TodoForm({
           value={dueDate}
           onChange={(e) => onDueDateChange(e.target.value)}
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <Label>Time Range (optional)</Label>
+          {(startTime || endTime) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto py-0 px-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                onStartTimeChange("");
+                onEndTimeChange("");
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            id="startTime"
+            type="time"
+            value={startTime}
+            onChange={(e) => onStartTimeChange(e.target.value)}
+          />
+          <Input
+            id="endTime"
+            type="time"
+            value={endTime}
+            onChange={(e) => onEndTimeChange(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">

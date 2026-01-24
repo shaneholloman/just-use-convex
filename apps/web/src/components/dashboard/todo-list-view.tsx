@@ -2,13 +2,14 @@ import { useCallback, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { VirtualList } from "@/components/ui/virtual-list";
 import type { Todo, TodoStatus } from "@/hooks/use-todos";
+import type { PaginationStatus } from "@/hooks/use-paginated-query";
 import { TodoListItem } from "./todo-list-item";
 import { statusOrder, priorityOrder } from "./constants";
 
 interface TodoListViewProps {
   todos: Todo[];
   loadMore: (count: number) => void;
-  status: "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
+  status: PaginationStatus;
   onOpenTodo: (todo: Todo) => void;
   onStatusChange: (todoId: Todo["_id"], status: TodoStatus) => void;
 }
@@ -56,7 +57,7 @@ export function TodoListView({
   );
 
   return (
-    <Card className="flex-1 min-h-0">
+    <Card className="flex-1 min-h-0 p-0">
       <CardContent className="p-0 h-full max-h-[calc(100vh-240px)]">
         <VirtualList
           query={sortedQueryForVirtualList}

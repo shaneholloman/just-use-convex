@@ -1,22 +1,26 @@
 import { useState, useMemo, useCallback, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { useAtom } from "jotai";
 import { useTodos, useTodosList, useOrgStats, type Todo, type TodoFilters } from "@/hooks/use-todos";
 import { useTeams } from "@/hooks/auth/organization/use-teams";
 import { useMembers } from "@/hooks/auth/organization/use-members";
 import { useUser } from "@/hooks/auth/user/use-user";
 import { TodoDialog } from "@/components/todos/todo-dialog";
-import { Loader2 } from "lucide-react";
 import {
   DashboardHeader,
   DashboardToolbar,
   KanbanBoard,
   TodoListView,
   CalendarView,
-  type ViewMode,
+  KanbanSkeleton,
+  ListSkeleton,
+  CalendarSkeleton,
   type KanbanGroupBy,
   type PriorityFilterValue,
   type StatusFilterValue,
+  type DateRange,
 } from "@/components/dashboard";
+import { viewModeAtom } from "@/store/dashboard";
 
 export const Route = createFileRoute("/(protected)/dashboard")({
   component: RouteComponent,
@@ -29,12 +33,13 @@ function RouteComponent() {
   const { user } = useUser();
   const orgStats = useOrgStats();
 
-  const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [viewMode, setViewMode] = useAtom(viewModeAtom);
   const [groupBy, setGroupBy] = useState<KanbanGroupBy>("status");
   const [filterPriority, setFilterPriority] = useState<PriorityFilterValue>("all");
   const [filterStatus, setFilterStatus] = useState<StatusFilterValue>("all");
   const [filterTeamId, setFilterTeamId] = useState<string | "all">("all");
   const [filterMemberId, setFilterMemberId] = useState<string | "all">("all");
+  const [calendarDateRange, setCalendarDateRange] = useState<DateRange | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
@@ -50,8 +55,13 @@ function RouteComponent() {
     } else if (filterMemberId !== "all") {
       f.assignedUserId = filterMemberId;
     }
+    // Apply date range filter when in calendar mode
+    if (viewMode === "calendar" && calendarDateRange) {
+      f.dueDateFrom = calendarDateRange.from;
+      f.dueDateTo = calendarDateRange.to;
+    }
     return f;
-  }, [filterPriority, filterStatus, filterTeamId, filterMemberId, user?.id]);
+  }, [filterPriority, filterStatus, filterTeamId, filterMemberId, user?.id, viewMode, calendarDateRange]);
 
   const todosQuery = useTodosList(filters);
   const { results: todos, status } = todosQuery;
@@ -84,8 +94,28 @@ function RouteComponent() {
 
   if (isInitialLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      <div className="flex flex-col gap-4 p-2 h-full">
+        <DashboardHeader stats={undefined} onCreateClick={() => {}} />
+        <DashboardToolbar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+          filterPriority={filterPriority}
+          onFilterPriorityChange={setFilterPriority}
+          filterStatus={filterStatus}
+          onFilterStatusChange={setFilterStatus}
+          filterTeamId={filterTeamId}
+          onFilterTeamIdChange={setFilterTeamId}
+          filterMemberId={filterMemberId}
+          onFilterMemberIdChange={setFilterMemberId}
+          teams={teams}
+          members={members}
+          onClearFilters={clearFilters}
+        />
+        {viewMode === "kanban" && <KanbanSkeleton />}
+        {viewMode === "list" && <ListSkeleton />}
+        {viewMode === "calendar" && <CalendarSkeleton />}
       </div>
     );
   }
@@ -119,6 +149,8 @@ function RouteComponent() {
           onOpenTodo={openTodoDialog}
           onStatusChange={updateStatus}
           onPriorityChange={updatePriority}
+          loadMore={todosQuery.loadMore}
+          status={todosQuery.status}
         />
       )}
       {viewMode === "list" && (
@@ -135,6 +167,7 @@ function RouteComponent() {
           todos={todos}
           onOpenTodo={openTodoDialog}
           onStatusChange={updateStatus}
+          onDateRangeChange={setCalendarDateRange}
         />
       )}
 
