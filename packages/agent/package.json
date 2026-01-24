@@ -1,0 +1,24 @@
+{
+  "name": "@just-use-convex/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx alchemy dev alchemy.run.ts",
+    "deploy": "bunx alchemy deploy alchemy.run.ts",
+    "destroy": "bunx alchemy destroy alchemy.run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "agents": "^0.3.6",
+    "alchemy": "^0.83.1",
+    "drizzle-orm": "^0.45.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250121.0",
+    "@just-use-convex/config": "workspace:*",
+    "@types/node": "^24.3.0",
+    "typescript": "catalog:"
+  }
+}
