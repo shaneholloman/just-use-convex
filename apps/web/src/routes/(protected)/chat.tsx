@@ -1,94 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import { useAgent } from "agents/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAgentChat } from "@cloudflare/ai-chat/react";
+import { useAgentChatInstance } from "@/providers/agents";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { SendHorizontal, Loader2, Bot, User, ChevronDown, ChevronUp } from "lucide-react";
-import { env } from "@just-use-convex/env/web";
-
-type MessagePart =
-  | { type: "text"; text: string }
-  | { type: "tool-call"; state: string; toolName: string; output: unknown };
-
-type Message = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  parts: MessagePart[];
-};
+import { type UIMessage } from "@ai-sdk/react";
 
 export const Route = createFileRoute("/(protected)/chat")({
   component: ChatPage,
 });
 
 function ChatPage() {
-  const agent = useAgent({
-    agent: "agent",
-    name: "chat",
-    host: env.VITE_AGENT_URL
-  });
-
-  if (!agent) {
-    return (
-      <div className="flex flex-col h-full max-h-[calc(100vh-4rem)]">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Bot className="size-5 text-primary" />
-            <h1 className="text-sm font-medium">Chat</h1>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          {agent ? (
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          ) : (
-            <p className="text-sm text-muted-foreground">Failed to connect to agent</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return <ChatContent agent={agent} />;
-}
-
-function ToolCallAccordion({ toolName, output }: { toolName: string; output: unknown }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="mt-2 bg-background/50 rounded text-xs font-mono">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full p-2 hover:bg-background/80 rounded transition-colors"
-      >
-        <span className="text-muted-foreground">Tool: {toolName}</span>
-        {isOpen ? (
-          <ChevronUp className="size-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="size-4 text-muted-foreground" />
-        )}
-      </button>
-      {isOpen && (
-        <div className="px-2 pb-2">
-          <pre className="overflow-auto">
-            {JSON.stringify(output, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [input, setInput] = useState("");
 
-  const { messages, sendMessage, clearHistory, status, error } = useAgentChat({
-    agent: agent,
-    credentials: 'include', // Send cookies with requests
+  const { messages, sendMessage, clearHistory, status, error, isConnected } = useAgentChatInstance({
+    name: "chat",
     onError: (err: Error) => {
       console.error("Chat error:", err);
     },
@@ -118,6 +48,22 @@ function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
     inputRef.current?.focus();
   }, []);
 
+  if (!isConnected) {
+    return (
+      <div className="flex flex-col h-full max-h-[calc(100vh-4rem)]">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Bot className="size-5 text-primary" />
+            <h1 className="text-sm font-medium">Chat</h1>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">Connecting to agent...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-4rem)]">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -140,7 +86,7 @@ function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
               <p className="text-sm">Start a conversation</p>
             </div>
           ) : (
-            (messages as Message[]).map((message) => (
+            (messages).map((message) => (
               <div
                 key={message.id}
                 className={cn(
@@ -161,7 +107,7 @@ function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
                       : "bg-muted"
                   )}
                 >
-                  {message.parts.map((part: MessagePart, i: number) => {
+                  {message.parts.map((part, i: number) => {
                     if (part.type === "text") {
                       return (
                         <p key={i} className="whitespace-pre-wrap">
@@ -170,7 +116,7 @@ function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
                       );
                     }
                     if (
-                      part.type === "tool-call" &&
+                      part.type === "dynamic-tool" &&
                       part.state === "output-available"
                     ) {
                       return (
@@ -232,3 +178,32 @@ function ChatContent({ agent }: { agent: ReturnType<typeof useAgent<any>> }) {
     </div>
   );
 }
+
+function ToolCallAccordion({ toolName, output }: { toolName: string; output: unknown }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mt-2 bg-background/50 rounded text-xs font-mono">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between w-full p-2 hover:bg-background/80 rounded transition-colors"
+      >
+        <span className="text-muted-foreground">Tool: {toolName}</span>
+        {isOpen ? (
+          <ChevronUp className="size-4 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="size-4 text-muted-foreground" />
+        )}
+      </button>
+      {isOpen && (
+        <div className="px-2 pb-2">
+          <pre className="overflow-auto">
+            {JSON.stringify(output, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -12,6 +12,7 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { createServerFn } from "@tanstack/react-start";
 import { ThemeProvider, ThemeScript } from "@/components/tweakcn-theme-provider";
+import { AgentsProvider } from "@/providers/agents";
 import appCss from "../index.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { authClient } from "@/lib/auth-client";
@@ -84,21 +85,23 @@ function RootDocument() {
       initialToken={context.token}
     >
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <html lang="en" suppressHydrationWarning>
-          <head>
-            <HeadContent />
-            <ThemeScript storageKey="theme" defaultTheme="system" attribute="class" enableSystem />
-          </head>
-          <body>
-            <div className="grid h-svh grid-rows-[auto_1fr]">
-              <Header />
-              <Outlet />
-            </div>
-            <Toaster richColors />
-            <TanStackRouterDevtools position="bottom-left" />
-            <Scripts />
-          </body>
-        </html>
+        <AgentsProvider>
+          <html lang="en" suppressHydrationWarning>
+            <head>
+              <HeadContent />
+              <ThemeScript storageKey="theme" defaultTheme="system" attribute="class" enableSystem />
+            </head>
+            <body>
+              <div className="grid h-svh grid-rows-[auto_1fr]">
+                <Header />
+                <Outlet />
+              </div>
+              <Toaster richColors />
+              <TanStackRouterDevtools position="bottom-left" />
+              <Scripts />
+            </body>
+          </html>
+        </AgentsProvider>
       </ThemeProvider>
     </ConvexBetterAuthProvider>
   );

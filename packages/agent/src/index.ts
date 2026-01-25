@@ -105,6 +105,8 @@ export class Agent extends AIChatAgent<typeof worker.Env> {
           configurable: {
             thread_id: threadId,
           },
+          streamMode: ["messages", "values"],
+          recursionLimit: 100
         },
       );
 
