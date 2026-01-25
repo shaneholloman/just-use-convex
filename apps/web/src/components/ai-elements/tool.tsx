@@ -29,7 +29,7 @@ export const Tool = ({ className, ...props }: ToolProps) => (
   />
 );
 
-export type ToolPart = ToolUIPart | DynamicToolUIPart;
+export type ToolPart = DynamicToolUIPart;
 
 export type ToolHeaderProps = {
   title?: string;
@@ -117,16 +117,36 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: ToolPart["input"];
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-2 overflow-hidden p-4", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-      Parameters
-    </h4>
-    <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  if (input === undefined || input === null) {
+    return null;
+  }
+
+  let jsonString = "{}";
+  try {
+    const stringified = JSON.stringify(input, null, 2);
+    if (stringified !== undefined && stringified !== null) {
+      jsonString = stringified;
+    }
+  } catch (error) {
+    // If JSON serialization fails, fall back to string representation
+    const str = String(input);
+    if (str && str !== "[object Object]") {
+      jsonString = str;
+    }
+  }
+
+  return (
+    <div className={cn("space-y-2 overflow-hidden p-4", className)} {...props}>
+      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        Parameters
+      </h4>
+      <div className="rounded-md bg-muted/50">
+        <CodeBlock code={jsonString} language="json" />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ToolPart["output"];
@@ -145,11 +165,12 @@ export const ToolOutput = ({
 
   let Output = <div>{output as ReactNode}</div>;
 
-  if (typeof output === "object" && !isValidElement(output)) {
-    Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
-    );
-  } else if (typeof output === "string") {
+  if (typeof output === "object" && output !== null && !isValidElement(output)) {
+    const stringified = JSON.stringify(output, null, 2);
+    if (stringified && stringified !== "{}") {
+      Output = <CodeBlock code={stringified} language="json" />;
+    }
+  } else if (typeof output === "string" && output) {
     Output = <CodeBlock code={output} language="json" />;
   }
 

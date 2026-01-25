@@ -94,7 +94,7 @@ const FilePart = memo(function FilePart({ part, partKey }: FilePartProps) {
 export const MessageItem = memo(function MessageItem({ message, isStreaming }: MessageItemProps) {
   return (
     <Message from={message.role} className="mx-auto w-4xl px-4">
-      <MessageContent>
+      <MessageContent className="group-[.is-user]:max-w-[70%]">
         {message.parts.map((part, i) => {
           if (part.type === "text") {
             return <TextPart key={i} part={part} role={message.role} partKey={i} />;

@@ -94,7 +94,7 @@ function RouteComponent() {
 
   if (isInitialLoading) {
     return (
-      <div className="flex flex-col gap-4 p-2 h-full">
+      <div className="flex flex-col gap-4 p-2 h-full mx-auto w-4xl">
         <DashboardHeader stats={undefined} onCreateClick={() => {}} />
         <DashboardToolbar
           viewMode={viewMode}
@@ -121,7 +121,7 @@ function RouteComponent() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-2 h-full container mx-auto w-4xl">
+    <div className="flex flex-col gap-4 p-2 h-full mx-auto w-4xl">
       <DashboardHeader stats={orgStats.data} onCreateClick={openCreateDialog} />
 
       <DashboardToolbar

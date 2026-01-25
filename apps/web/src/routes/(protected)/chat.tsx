@@ -94,7 +94,7 @@ function ChatPage() {
             <VirtualMessageList messages={messages} isStreaming={isStreaming} />
           )}
           {error && (
-            <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3">
+            <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3 mx-auto w-4xl">
               {error.message}
             </div>
           )}
