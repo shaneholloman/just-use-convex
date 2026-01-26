@@ -1,6 +1,7 @@
 import { PaperclipIcon } from "lucide-react";
 import type { OpenRouterModel } from "@/hooks/use-openrouter-models";
 import type { useAgentChat } from "@cloudflare/ai-chat/react";
+import { memo } from "react";
 
 export type ChatSettings = {
   model?: string;
@@ -23,8 +24,6 @@ import {
 } from "@/components/ai-elements/attachments";
 import { ChatModelSelector } from "./chat-model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
-import { TodosDisplay } from "./todos-display";
-import type { QueueTodo } from "@/components/ai-elements/queue";
 
 export type ChatInputProps = {
   onSubmit: (message: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => void;
@@ -35,11 +34,10 @@ export type ChatInputProps = {
   groupedModels: [string, OpenRouterModel[]][];
   models: OpenRouterModel[];
   selectedModel?: OpenRouterModel;
-  todos?: QueueTodo[];
   hasMessages: boolean;
 };
 
-export function ChatInput({
+export const ChatInput = memo(function ChatInput({
   onSubmit,
   status,
   onStop,
@@ -48,14 +46,12 @@ export function ChatInput({
   groupedModels,
   models,
   selectedModel,
-  todos = [],
   hasMessages,
 }: ChatInputProps) {
   const supportsReasoning = selectedModel?.supports_reasoning ?? false;
 
   return (
     <div className="pb-1 mx-auto w-4xl">
-      <TodosDisplay todos={todos} />
       <PromptInput
         onSubmit={({ text, files }) => onSubmit({ text, files })}
         accept="image/*,application/pdf"
@@ -86,7 +82,7 @@ export function ChatInput({
       </PromptInput>
     </div>
   );
-}
+})
 
 function AttachmentButton() {
   const attachments = usePromptInputAttachments();

@@ -11,12 +11,13 @@ import {
   QueueItemContent,
   type QueueTodo,
 } from "@/components/ai-elements/queue";
+import { memo } from "react";
 
 export interface TodosDisplayProps {
   todos: QueueTodo[];
 }
 
-export function TodosDisplay({ todos }: TodosDisplayProps) {
+export const TodosDisplay = memo(function TodosDisplay({ todos }: TodosDisplayProps) {
   if (todos.length === 0) return null;
 
   const activeCount = todos.filter((t) => t.status !== "completed").length;
@@ -55,4 +56,4 @@ export function TodosDisplay({ todos }: TodosDisplayProps) {
       </QueueSection>
     </Queue>
   );
-}
+});

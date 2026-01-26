@@ -12,7 +12,9 @@ import {
   useSyncExternalStore,
   useRef,
   type ReactNode,
+  createElement,
 } from "react";
+import { createRoot, type Root } from "react-dom/client";
 
 type AgentChatInstance = ReturnType<typeof useAgentChat>;
 
@@ -30,14 +32,26 @@ type AgentsContextValue = {
 
 const AgentsContext = createContext<AgentsContextValue | null>(null);
 
-// Individual agent instance component that maintains the connection
-function AgentInstance({
-  chatId,
-  onUpdate,
-}: {
-  chatId: string;
-  onUpdate: (chatId: string, data: InstanceData) => void;
-}) {
+const instanceDataStore = new Map<string, InstanceData>();
+const subscribersStore = new Map<string, Set<() => void>>();
+
+function notifySubscribers(chatId: string) {
+  subscribersStore.get(chatId)?.forEach((cb) => cb());
+}
+
+function updateInstanceData(chatId: string, data: InstanceData) {
+  instanceDataStore.set(chatId, data);
+  notifySubscribers(chatId);
+}
+
+type IsolatedInstance = {
+  root: Root;
+  container: HTMLDivElement;
+};
+
+const isolatedInstances = new Map<string, IsolatedInstance>();
+
+function AgentInstanceInner({ chatId }: { chatId: string }) {
   const [settings, setSettingsState] = useState<ChatSettings>({});
 
   const handleStateUpdate = useCallback(
@@ -62,19 +76,17 @@ function AgentInstance({
     []
   );
 
-  // Refs to hold current values for onMessage callback
   const chatRef = useRef<AgentChatInstance | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Notify subscribers when messages arrive
   const handleMessage = useCallback(() => {
-    onUpdate(chatId, {
+    updateInstanceData(chatId, {
       chat: chatRef.current,
       settings: settingsRef.current,
       setSettings,
     });
-  }, [chatId, onUpdate, setSettings]);
+  }, [chatId, setSettings]);
 
   const agent = useAgent<ChatSettings>({
     agent: "agent-worker",
@@ -91,49 +103,59 @@ function AgentInstance({
     onError: handleError,
   });
 
-  // Keep chatRef in sync
   chatRef.current = chat;
 
-  // Initial registration and settings sync
   useEffect(() => {
-    onUpdate(chatId, { chat, settings, setSettings });
-  }, [chatId, chat, settings, setSettings, onUpdate]);
+    updateInstanceData(chatId, { chat, settings, setSettings });
+  }, [chatId, chat, settings, setSettings]);
 
   return null;
 }
 
+function createIsolatedInstance(chatId: string): void {
+  if (isolatedInstances.has(chatId)) return;
+
+  // Create a hidden container for this instance
+  const container = document.createElement("div");
+  container.style.display = "none";
+  container.dataset.agentInstance = chatId;
+  document.body.appendChild(container);
+
+  // Create a separate React root - this won't be affected by parent re-renders
+  const root = createRoot(container);
+  root.render(createElement(AgentInstanceInner, { chatId }));
+
+  isolatedInstances.set(chatId, { root, container });
+}
+
+// function destroyIsolatedInstance(chatId: string): void {
+//   const instance = isolatedInstances.get(chatId);
+//   if (!instance) return;
+
+//   instance.root.unmount();
+//   instance.container.remove();
+//   isolatedInstances.delete(chatId);
+//   instanceDataStore.delete(chatId);
+// }
+
 export function AgentsProvider({ children }: { children: ReactNode }) {
-  const instanceDataRef = useRef<Map<string, InstanceData>>(new Map());
-  const subscribersRef = useRef<Map<string, Set<() => void>>>(new Map());
-
-  // Store active chat IDs and render elements dynamically
-  const [activeIds, setActiveIds] = useState<string[]>([]);
-
-  const handleInstanceUpdate = useCallback((chatId: string, data: InstanceData) => {
-    instanceDataRef.current.set(chatId, data);
-    subscribersRef.current.get(chatId)?.forEach((cb) => cb());
-  }, []);
-
   const requestInstance = useCallback((chatId: string) => {
-    setActiveIds((prev) => {
-      if (prev.includes(chatId)) return prev;
-      return [...prev, chatId];
-    });
+    createIsolatedInstance(chatId);
   }, []);
 
   const subscribe = useCallback((chatId: string, callback: () => void) => {
-    if (!subscribersRef.current.has(chatId)) {
-      subscribersRef.current.set(chatId, new Set());
+    if (!subscribersStore.has(chatId)) {
+      subscribersStore.set(chatId, new Set());
     }
-    subscribersRef.current.get(chatId)!.add(callback);
+    subscribersStore.get(chatId)!.add(callback);
 
     return () => {
-      subscribersRef.current.get(chatId)?.delete(callback);
+      subscribersStore.get(chatId)?.delete(callback);
     };
   }, []);
 
   const getSnapshot = useCallback((chatId: string) => {
-    return instanceDataRef.current.get(chatId);
+    return instanceDataStore.get(chatId);
   }, []);
 
   const value = useMemo<AgentsContextValue>(
@@ -147,13 +169,6 @@ export function AgentsProvider({ children }: { children: ReactNode }) {
 
   return (
     <AgentsContext.Provider value={value}>
-      {activeIds.map((id) => (
-        <AgentInstance
-          key={id}
-          chatId={id}
-          onUpdate={handleInstanceUpdate}
-        />
-      ))}
       {children}
     </AgentsContext.Provider>
   );

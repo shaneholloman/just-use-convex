@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import type { UIMessage } from "@ai-sdk/react";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useOpenRouterModels, type OpenRouterModel } from "@/hooks/use-openrouter-models";
 import { ChatInput, type ChatInputProps } from "@/components/chat";
 import {
@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualMessageList } from "@/components/chat/virtual-message-list";
 import type { QueueTodo } from "@/components/ai-elements/queue";
 import { useAgentInstance } from "@/providers/agent";
+import { TodosDisplay } from "@/components/chat/todos-display";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -40,20 +41,39 @@ function ChatPage() {
     [models, settings.model]
   );
 
-  if (!isReady || !chat) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 flex">
-          <ChatLoadingSkeleton />
-        </div>
-      </div>
-    );
-  }
+  // Extract values safely before any conditional returns to maintain hook order
+  const messages = chat?.messages ?? [];
+  const sendMessage = chat?.sendMessage;
 
-  const { messages, sendMessage, status, error, stop } = chat;
-  const isStreaming = status === "streaming";
+  const handleSubmit: ChatInputProps["onSubmit"] = useCallback(
+    async ({ text, files }: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => {
+      if (!sendMessage) return;
+      if (!text.trim() && files.length === 0) return;
 
-  const derivedState = (() => {
+      const parts: UIMessage["parts"] = [];
+
+      if (text.trim()) {
+        parts.push({ type: "text", text });
+      }
+
+      for (const file of files) {
+        parts.push({
+          type: "file",
+          url: file.url,
+          mediaType: file.mediaType,
+          filename: file.filename,
+        });
+      }
+
+      await sendMessage({
+        role: "user",
+        parts,
+      });
+    },
+    [sendMessage]
+  );
+
+  const derivedState = useMemo(() => {
     const state = {
       todos: [] as QueueTodo[],
     };
@@ -82,31 +102,20 @@ function ChatPage() {
     }
 
     return state;
-  })();
+  }, [messages]);
 
-  const handleSubmit: ChatInputProps["onSubmit"] = async ({ text, files }: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => {
-    if (!text.trim() && files.length === 0) return;
+  if (!isReady || !chat) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex">
+          <ChatLoadingSkeleton />
+        </div>
+      </div>
+    );
+  }
 
-    const parts: UIMessage["parts"] = [];
-
-    if (text.trim()) {
-      parts.push({ type: "text", text });
-    }
-
-    for (const file of files) {
-      parts.push({
-        type: "file",
-        url: file.url,
-        mediaType: file.mediaType,
-        filename: file.filename,
-      });
-    }
-
-    await sendMessage({
-      role: "user",
-      parts,
-    });
-  };
+  const { status, error, stop } = chat;
+  const isStreaming = status === "streaming";
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -130,6 +139,9 @@ function ChatPage() {
         <ConversationScrollButton />
       </Conversation>
 
+      <div className="mx-auto w-4xl pb-1">
+        <TodosDisplay todos={derivedState.todos} />
+      </div>
       <ChatInput
         onSubmit={handleSubmit}
         status={status}
@@ -139,7 +151,6 @@ function ChatPage() {
         groupedModels={groupedModels}
         models={models}
         selectedModel={selectedModel}
-        todos={derivedState.todos}
         hasMessages={messages.length > 0}
       />
     </div>
