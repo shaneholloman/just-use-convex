@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import type { UIMessage } from "@ai-sdk/react";
-import { useCallback, useMemo, useState } from "react";
-import { useOpenRouterModels } from "@/hooks/use-openrouter-models";
-import { ChatInput, type ChatInputProps, type ChatSettings } from "@/components/chat";
+import { useMemo } from "react";
+import { useOpenRouterModels, type OpenRouterModel } from "@/hooks/use-openrouter-models";
+import { ChatInput, type ChatInputProps } from "@/components/chat";
 import {
   Conversation,
   ConversationContent,
@@ -12,10 +12,8 @@ import {
 } from "@/components/ai-elements/conversation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualMessageList } from "@/components/chat/virtual-message-list";
-import { useAgent } from "agents/react";
-import { useAgentChat } from "@cloudflare/ai-chat/react";
-import { env } from "@just-use-convex/env/web";
 import type { QueueTodo } from "@/components/ai-elements/queue";
+import { useAgentInstance } from "@/providers/agent";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -34,51 +32,15 @@ function ChatLoadingSkeleton() {
 
 function ChatPage() {
   const { chatId } = Route.useParams();
-
-  const [settings, setSettings] = useState<ChatSettings>({});
-
-  const handleStateUpdate = useCallback((state: ChatSettings | undefined, source: string) => {
-    if (source === "server" && state) {
-      setSettings(state);
-    }
-  }, []);
-
-  const handleError = useCallback((error: Error) => {
-    console.error("Chat error:", error);
-  }, []);
-
-  const agent = useAgent<ChatSettings>({
-    agent: "agent-worker",
-    name: `chat-${chatId}`,
-    host: env.VITE_AGENT_URL,
-    onStateUpdate: handleStateUpdate,
-  });
-
-  const chat = useAgentChat({
-    agent,
-    credentials: "include",
-    resume: true,
-    onError: handleError
-  });
-
+  const { chat, settings, setSettings, isReady } = useAgentInstance(chatId);
   const { groupedModels, models } = useOpenRouterModels();
 
   const selectedModel = useMemo(
-    () => models.find((m) => m.slug === settings.model),
+    () => models.find((m: OpenRouterModel) => m.slug === settings.model),
     [models, settings.model]
   );
 
-  const handleSettingsChange = useCallback(
-    (settingsOrFn: ChatSettings | ((prev: ChatSettings) => ChatSettings)) => {
-      setSettings((prev) =>
-        typeof settingsOrFn === "function" ? settingsOrFn(prev) : settingsOrFn
-      );
-    },
-    []
-  );
-
-  // Show loading while chat instance is initializing
-  if (!chat) {
+  if (!isReady || !chat) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex">
@@ -90,11 +52,10 @@ function ChatPage() {
 
   const { messages, sendMessage, status, error, stop } = chat;
   const isStreaming = status === "streaming";
-  
-  const derivedState = useMemo(() => {
+
+  const derivedState = (() => {
     const state = {
       todos: [] as QueueTodo[],
-      // Add additional fields here as needed
     };
 
     const lastMsg = messages[messages.length - 1];
@@ -117,14 +78,13 @@ function ChatPage() {
           }
           break;
         }
-        // Add additional tool handlers here
       }
     }
 
     return state;
-  }, [messages]);
+  })();
 
-  const handleSubmit: ChatInputProps["onSubmit"] = async ({ text, files }) => {
+  const handleSubmit: ChatInputProps["onSubmit"] = async ({ text, files }: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => {
     if (!text.trim() && files.length === 0) return;
 
     const parts: UIMessage["parts"] = [];
@@ -175,7 +135,7 @@ function ChatPage() {
         status={status}
         onStop={stop}
         settings={settings}
-        setSettings={handleSettingsChange}
+        setSettings={setSettings}
         groupedModels={groupedModels}
         models={models}
         selectedModel={selectedModel}

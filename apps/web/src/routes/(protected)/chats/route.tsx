@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Outlet } from '@tanstack/react-router'
+import { createFileRoute, Outlet } from '@tanstack/react-router'
+import { AgentsProvider } from '@/providers/agent'
 
 export const Route = createFileRoute('/(protected)/chats')({
   component: RouteComponent,
@@ -7,8 +7,10 @@ export const Route = createFileRoute('/(protected)/chats')({
 
 function RouteComponent() {
   return (
-    <div className="h-full">
-      <Outlet />
-    </div>
+    <AgentsProvider>
+      <div className="h-full">
+        <Outlet />
+      </div>
+    </AgentsProvider>
   )
 }
