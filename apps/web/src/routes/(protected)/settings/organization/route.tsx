@@ -10,7 +10,7 @@ export const Route = createFileRoute('/(protected)/settings/organization')({
 function RouteComponent() {
   const navigate = useNavigate()
   const location = useLocation()
-  
+
   const handleChange = useCallback((value: string) => {
     const path = value ? `/settings/organization/${value}` : '/settings/organization'
     navigate({ to: path })
@@ -22,8 +22,11 @@ function RouteComponent() {
     { value: 'teams', label: 'Teams' },
   ]
 
+  // Extract the part after /settings/organization/ or empty string if just /settings/organization
+  const activeTab = location.pathname === '/settings/organization' ? '' : location.pathname.split('/settings/organization/')[1] || '';
+
   return (
-    <Tabs value={location.pathname.split('/').pop() ?? ""}>
+    <Tabs value={activeTab}>
       <TabsList className="w-full justify-between bg-transparent px-0">
         <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
           {paths.map(({ value, label }) => (

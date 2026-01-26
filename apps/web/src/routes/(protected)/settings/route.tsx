@@ -21,8 +21,11 @@ function RouteComponent() {
     { value: "organization", label: "Organization" },
   ]
 
+  // Extract the part after /settings/ or empty string if just /settings
+  const activeTab = location.pathname === '/settings' ? '' : location.pathname.split('/settings/')[1] || '';
+
   return (
-    <Tabs value={location.pathname.split('/').pop() ?? ""} className="mx-auto w-4xl py-2">
+    <Tabs value={activeTab} className="mx-auto w-4xl py-2">
       <TabsList>
         {paths.map(({ value, label }) => (
           <TabsTrigger key={value} value={value} onClick={() => handleChange(value)}>{label}</TabsTrigger>
