@@ -22,8 +22,7 @@ export default {
     // Get origin for CORS (credentials require specific origin, not *)
     const origin = env.SITE_URL;
 
-    const headers = request.headers;
-    const forwaredResponse = (
+    return (
       (await routeAgentRequest(request, env, {
         prefix: 'agents',
         cors: {
@@ -35,14 +34,6 @@ export default {
         },
       })) || new Response('Not found', { status: 404 })
     );
-
-    return new Response(forwaredResponse.body, {
-      ...forwaredResponse,
-      headers: {
-        ...forwaredResponse.headers,
-        ...headers,
-      }
-    });
   },
 };
 
@@ -61,9 +52,16 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
   private async _init(request: Request): Promise<void> {
     const headers = request.headers;
-    const token = headers.get('cookie')?.split(';').find(cookie =>
-      cookie.trim().startsWith('better-auth.convex_jwt=')
-    )?.split('=')[1];
+    const cookieHeader = headers.get('cookie') ?? '';
+    const cookies = cookieHeader.split(';').map(c => c.trim());
+    
+    // Check for both production (__Secure- prefix) and development cookie names
+    const tokenCookie = cookies.find(cookie =>
+      cookie.startsWith('__Secure-better-auth.convex_jwt=') ||
+      cookie.startsWith('better-auth.convex_jwt=')
+    );
+    const token = tokenCookie?.split('=')[1];
+    
     if (!token) {
       throw new Error("Unauthorized: No token provided");
     }
