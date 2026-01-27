@@ -51,17 +51,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   private async _init(request: Request): Promise<void> {
-    const headers = request.headers;
-    const cookieHeader = headers.get('cookie') ?? '';
-    const cookies = cookieHeader.split(';').map(c => c.trim());
-    
-    // Check for both production (__Secure- prefix) and development cookie names
-    const tokenCookie = cookies.find(cookie =>
-      cookie.startsWith('__Secure-better-auth.convex_jwt=') ||
-      cookie.startsWith('better-auth.convex_jwt=')
-    );
-    const token = tokenCookie?.split('=')[1];
-    
+    const token = (new URL(request.url)).searchParams.get('token');
+    console.log("token", request.url, token);
     if (!token) {
       throw new Error("Unauthorized: No token provided");
     }

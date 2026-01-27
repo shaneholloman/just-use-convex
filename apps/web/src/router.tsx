@@ -8,6 +8,7 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 import { Spinner } from "@/components/ui/spinner";
 
 import { routeTree } from "./routeTree.gen";
+import { TokenClient } from "./lib/token-client";
 
 export function getRouter() {
   const convexUrl = env.VITE_CONVEX_URL;
@@ -31,6 +32,8 @@ export function getRouter() {
     },
   });
   convexQueryClient.connect(queryClient);
+
+  const tokenClient = new TokenClient();
 
   // Set up persistence only on the client side
   if (typeof window !== "undefined") {
@@ -58,7 +61,7 @@ export function getRouter() {
         <div>Not Found</div>
       </div>
     ),
-    context: { queryClient, convexQueryClient },
+    context: { queryClient, convexQueryClient, tokenClient },
   });
 
   setupRouterSsrQueryIntegration({

@@ -51,7 +51,7 @@ type IsolatedInstance = {
 
 const isolatedInstances = new Map<string, IsolatedInstance>();
 
-function AgentInstanceInner({ chatId }: { chatId: string }) {
+function AgentInstanceInner({ chatId, token }: { chatId: string, token: string | null | undefined }) {
   const [settings, setSettingsState] = useState<ChatSettings>({});
 
   const handleStateUpdate = useCallback(
@@ -94,11 +94,13 @@ function AgentInstanceInner({ chatId }: { chatId: string }) {
     host: env.VITE_AGENT_URL,
     onStateUpdate: handleStateUpdate,
     onMessage: handleMessage,
+    query: {
+      token: token ?? null,
+    }
   });
 
   const chat = useAgentChat({
     agent,
-    credentials: "include",
     resume: true,
     onError: handleError,
   });
@@ -112,7 +114,7 @@ function AgentInstanceInner({ chatId }: { chatId: string }) {
   return null;
 }
 
-function createIsolatedInstance(chatId: string): void {
+function createIsolatedInstance(chatId: string, token: string | null | undefined): void {
   if (isolatedInstances.has(chatId)) return;
 
   // Create a hidden container for this instance
@@ -123,7 +125,7 @@ function createIsolatedInstance(chatId: string): void {
 
   // Create a separate React root - this won't be affected by parent re-renders
   const root = createRoot(container);
-  root.render(createElement(AgentInstanceInner, { chatId }));
+  root.render(createElement(AgentInstanceInner, { chatId, token }));
 
   isolatedInstances.set(chatId, { root, container });
 }
@@ -138,10 +140,10 @@ function createIsolatedInstance(chatId: string): void {
 //   instanceDataStore.delete(chatId);
 // }
 
-export function AgentsProvider({ children }: { children: ReactNode }) {
+export function AgentsProvider({ children, token }: { children: ReactNode, token: string | null | undefined }) {
   const requestInstance = useCallback((chatId: string) => {
-    createIsolatedInstance(chatId);
-  }, []);
+    createIsolatedInstance(chatId, token);
+  }, [token]);
 
   const subscribe = useCallback((chatId: string, callback: () => void) => {
     if (!subscribersStore.has(chatId)) {

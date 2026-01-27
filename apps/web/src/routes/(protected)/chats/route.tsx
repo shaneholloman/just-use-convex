@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet } from '@tanstack/react-router'
+import { createFileRoute, Outlet, useRouteContext } from '@tanstack/react-router'
 import { AgentsProvider } from '@/providers/agent'
 
 export const Route = createFileRoute('/(protected)/chats')({
@@ -6,8 +6,9 @@ export const Route = createFileRoute('/(protected)/chats')({
 })
 
 function RouteComponent() {
+  const { token } = useRouteContext({ from: "__root__" });
   return (
-    <AgentsProvider>
+    <AgentsProvider token={token}>
       <div className="h-full">
         <Outlet />
       </div>

@@ -1,5 +1,6 @@
 import type { ConvexQueryClient } from "@convex-dev/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import type { TokenClient } from "@/lib/token-client";
 
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import {
@@ -27,6 +28,7 @@ const getAuth = createServerFn({ method: "GET" }).handler(async () => {
 export interface RouterAppContext {
   queryClient: QueryClient;
   convexQueryClient: ConvexQueryClient;
+  tokenClient: TokenClient;
 }
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
@@ -67,6 +69,8 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     const token = await getAuth();
     if (token) {
       ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
+      console.log("token", token);
+      ctx.context.tokenClient.setToken(token);
     }
     return {
       isAuthenticated: !!token,
