@@ -15,12 +15,6 @@
       }
     ]
   },
-  "observability": {
-    "logs": {
-      "enabled": true,
-      "invocation_logs": true
-    }
-  },
   "migrations": [
     {
       "tag": "v1",
