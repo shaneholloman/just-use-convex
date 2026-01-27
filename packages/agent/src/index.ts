@@ -52,7 +52,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
   private async _init(request: Request): Promise<void> {
     const token = (new URL(request.url)).searchParams.get('token');
-    console.log("token", request.url, token);
     if (!token) {
       throw new Error("Unauthorized: No token provided");
     }
@@ -104,9 +103,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         reasoning: reasoningEffort ? {
           effort: reasoningEffort,
         } : undefined,
-        modelKwargs: {
-          reasoning_effort: reasoningEffort ? reasoningEffort : undefined,
-        },
       });
 
       const checkpointer = this.getCheckpointer();

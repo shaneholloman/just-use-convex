@@ -1,0 +1,217 @@
+---
+title: Agent Architecture
+description: Understanding the agent system architecture with Cloudflare Durable Objects and LangGraph
+---
+
+# Agent Architecture
+
+The agent system uses a multi-layered architecture combining Cloudflare Durable Objects for isolation, LangGraph for conversation orchestration, and Convex for data persistence.
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
+│  │ AgentsProvider │  │ useAgentInstance │  │ Chat Components │   │
+│  └───────┬─────┘  └───────┬──────┘  └───────────┬───────────┘   │
+└──────────┼────────────────┼─────────────────────┼───────────────┘
+           │                │                     │
+           └────────────────┼─────────────────────┘
+                            │ WebSocket
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               Cloudflare Durable Object (AgentWorker)            │
+│  ┌─────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
+│  │ State Sync  │  │ LangGraph Agent │  │ SQLite Checkpointer │   │
+│  └─────────────┘  └───────┬────────┘  └─────────────────────┘   │
+└───────────────────────────┼─────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        OpenRouter API                            │
+│  ┌─────────┐  ┌──────────┐  ┌────────┐  ┌─────────────────┐     │
+│  │ OpenAI  │  │ Anthropic │  │ Google │  │ Other Providers │     │
+│  └─────────┘  └──────────┘  └────────┘  └─────────────────┘     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Durable Object Agent
+
+Each chat session runs in an isolated Durable Object with its own state:
+
+```ts
+// packages/agent/src/index.ts
+export class AgentWorker extends AIChatAgent<Env, ChatState> {
+  private checkpointer: CloudflareDOCheckpointer | null = null;
+  private convexClient: ConvexHttpClient | null = null;
+
+  private getCheckpointer(): CloudflareDOCheckpointer {
+    if (!this.checkpointer) {
+      this.checkpointer = new CloudflareDOCheckpointer(
+        this.ctx.storage.sql as CloudflareSqlStorage
+      );
+    }
+    return this.checkpointer;
+  }
+
+  override async onChatMessage(onFinish, options): Promise<Response> {
+    const model = new ChatOpenAI({
+      model: this.state?.model || this.env.OPENROUTER_MODEL,
+      configuration: {
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: this.env.OPENROUTER_API_KEY,
+      },
+    });
+
+    const agent = createDeepAgent({
+      model,
+      systemPrompt: "You are a helpful assistant.",
+      checkpointer: this.getCheckpointer(),
+    });
+
+    const streamEvents = agent.streamEvents(
+      { messages: [humanMessage] },
+      { configurable: { thread_id: this.name } }
+    );
+
+    return createUIMessageStreamResponse({
+      stream: toUIMessageStream(streamEvents),
+    });
+  }
+}
+```
+
+### State Management
+
+The agent maintains two types of state:
+
+1. **Chat State** - Synced from frontend (model selection, reasoning effort)
+2. **Conversation State** - Managed by LangGraph checkpointer
+
+```ts
+type ChatState = {
+  model?: string;
+  reasoningEffort?: "low" | "medium" | "high";
+};
+
+// State updates from frontend
+override async onStateUpdate(state: ChatState, source: Connection | "server") {
+  await super.onStateUpdate(state, source);
+}
+```
+
+## LangGraph Checkpointer
+
+Custom checkpointer implementation for Cloudflare DO SQLite:
+
+```ts
+// packages/agent/src/checkpointer.ts
+export class CloudflareDOCheckpointer extends BaseCheckpointSaver {
+  constructor(private sql: CloudflareSqlStorage) {
+    super();
+    this.setup();
+  }
+
+  private setup(): void {
+    // Create tables for checkpoints, writes, and blob storage
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS checkpoints (
+        thread_id TEXT NOT NULL,
+        checkpoint_ns TEXT NOT NULL DEFAULT '',
+        checkpoint_id TEXT NOT NULL,
+        parent_checkpoint_id TEXT,
+        type TEXT,
+        checkpoint BLOB,
+        metadata BLOB,
+        PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
+      );
+    `);
+  }
+
+  async getTuple(config: RunnableConfig): Promise<CheckpointTuple | undefined> {
+    // Retrieve checkpoint from SQLite
+  }
+
+  async put(config, checkpoint, metadata): Promise<RunnableConfig> {
+    // Save checkpoint to SQLite
+  }
+}
+```
+
+## Authentication Flow
+
+The agent validates requests through Convex:
+
+```ts
+private async _init(request: Request): Promise<void> {
+  const token = new URL(request.url).searchParams.get("token");
+  if (!token) {
+    throw new Error("Unauthorized: No token provided");
+  }
+
+  if (!this.convexClient) {
+    this.convexClient = new ConvexHttpClient(this.env.CONVEX_URL);
+    this.convexClient.setAuth(token);
+
+    // Verify chat exists and user has access
+    const chat = await this.convexClient.query(api.chats.index.get, {
+      _id: this.name as Id<"chats">,
+    });
+    if (!chat) {
+      throw new Error("Unauthorized: No chat found");
+    }
+  }
+}
+```
+
+## Request Routing
+
+Requests are routed to the correct Durable Object by chat ID:
+
+```ts
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return await routeAgentRequest(request, env, {
+      prefix: "agents",
+      cors: {
+        "Access-Control-Allow-Origin": env.SITE_URL,
+        "Access-Control-Allow-Credentials": "true",
+      },
+    }) || new Response("Not found", { status: 404 });
+  },
+};
+```
+
+## File Structure
+
+```
+packages/agent/
+├── src/
+│   ├── index.ts           # AgentWorker class and request handling
+│   └── checkpointer.ts    # LangGraph checkpoint persistence
+├── alchemy.run.ts         # Deployment configuration
+├── wrangler.json          # Cloudflare Workers config
+└── package.json
+
+packages/backend/convex/
+├── chats/
+│   ├── functions.ts       # Chat CRUD operations
+│   ├── index.ts           # Exported queries/mutations
+│   └── tables/chats.ts    # Chat schema definition
+```
+
+## Key Dependencies
+
+```json
+{
+  "agents": "^0.3.6",
+  "deepagents": "^1.6.0",
+  "@langchain/openai": "^0.5.16",
+  "@langchain/langgraph-checkpoint": "^1.0.0",
+  "ai": "^6.0.49",
+  "@ai-sdk/langchain": "^2.0.54"
+}
+```
+
+Next, learn about [Frontend Integration](/docs/agent/frontend-integration).

@@ -2,6 +2,7 @@ import type { ChatSettings } from "@/components/chat";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { env } from "@just-use-convex/env/web";
 import { useAgent } from "agents/react";
+type AgentConnection = ReturnType<typeof useAgent<ChatSettings>>;
 import {
   createContext,
   useCallback,
@@ -20,6 +21,7 @@ type AgentChatInstance = ReturnType<typeof useAgentChat>;
 
 type InstanceData = {
   chat: AgentChatInstance | null;
+  agent: AgentConnection | null;
   settings: ChatSettings;
   setSettings: (settingsOrFn: ChatSettings | ((prev: ChatSettings) => ChatSettings)) => void;
 };
@@ -77,12 +79,14 @@ function AgentInstanceInner({ chatId, token }: { chatId: string, token: string |
   );
 
   const chatRef = useRef<AgentChatInstance | null>(null);
+  const agentRef = useRef<AgentConnection | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
   const handleMessage = useCallback(() => {
     updateInstanceData(chatId, {
       chat: chatRef.current,
+      agent: agentRef.current,
       settings: settingsRef.current,
       setSettings,
     });
@@ -106,9 +110,11 @@ function AgentInstanceInner({ chatId, token }: { chatId: string, token: string |
   });
 
   chatRef.current = chat;
+  agentRef.current = agent;
 
   useEffect(() => {
-    updateInstanceData(chatId, { chat, settings, setSettings });
+    updateInstanceData(chatId, { chat, agent, settings, setSettings });
+    agent.setState(settings)
   }, [chatId, chat, settings, setSettings]);
 
   return null;
@@ -207,6 +213,7 @@ export function useAgentInstance(chatId: string) {
 
   return {
     chat: data?.chat ?? null,
+    agent: data?.agent ?? null,
     settings: data?.settings ?? {},
     setSettings: data?.setSettings ?? (() => {}),
     isReady: !!data?.chat,

@@ -1,0 +1,317 @@
+---
+title: Frontend Integration
+description: Integrating the AI agent with React using agents/react and custom providers
+---
+
+# Frontend Integration
+
+The frontend connects to the agent using `agents/react` and custom context providers for isolated chat management.
+
+## AgentsProvider
+
+The `AgentsProvider` creates isolated React roots for each chat instance to prevent re-render interference:
+
+```tsx
+// src/providers/agent.tsx
+import { useAgent } from "agents/react";
+import { useAgentChat } from "@cloudflare/ai-chat/react";
+
+export function AgentsProvider({ children, token }: {
+  children: ReactNode;
+  token: string | null | undefined;
+}) {
+  const requestInstance = useCallback((chatId: string) => {
+    createIsolatedInstance(chatId, token);
+  }, [token]);
+
+  const subscribe = useCallback((chatId: string, callback: () => void) => {
+    if (!subscribersStore.has(chatId)) {
+      subscribersStore.set(chatId, new Set());
+    }
+    subscribersStore.get(chatId)!.add(callback);
+    return () => subscribersStore.get(chatId)?.delete(callback);
+  }, []);
+
+  const getSnapshot = useCallback((chatId: string) => {
+    return instanceDataStore.get(chatId);
+  }, []);
+
+  return (
+    <AgentsContext.Provider value={{ requestInstance, subscribe, getSnapshot }}>
+      {children}
+    </AgentsContext.Provider>
+  );
+}
+```
+
+### Isolated Instances
+
+Each chat runs in a separate React root to maintain state isolation:
+
+```tsx
+function createIsolatedInstance(chatId: string, token: string | null | undefined) {
+  if (isolatedInstances.has(chatId)) return;
+
+  const container = document.createElement("div");
+  container.style.display = "none";
+  document.body.appendChild(container);
+
+  const root = createRoot(container);
+  root.render(createElement(AgentInstanceInner, { chatId, token }));
+
+  isolatedInstances.set(chatId, { root, container });
+}
+```
+
+## useAgentInstance Hook
+
+Access agent functionality from any component:
+
+```tsx
+export function useAgentInstance(chatId: string) {
+  const { requestInstance, subscribe, getSnapshot } = useAgentsContext();
+
+  useEffect(() => {
+    requestInstance(chatId);
+  }, [chatId, requestInstance]);
+
+  const subscribeToChat = useCallback(
+    (callback: () => void) => subscribe(chatId, callback),
+    [chatId, subscribe]
+  );
+
+  const getSnapshotForChat = useCallback(
+    () => getSnapshot(chatId),
+    [chatId, getSnapshot]
+  );
+
+  const data = useSyncExternalStore(subscribeToChat, getSnapshotForChat);
+
+  return {
+    chat: data?.chat ?? null,
+    settings: data?.settings ?? {},
+    setSettings: data?.setSettings ?? (() => {}),
+    isReady: !!data?.chat,
+  };
+}
+```
+
+## Using the Agent
+
+### Basic Chat Page
+
+```tsx
+// src/routes/(protected)/chats/$chatId.tsx
+export default function ChatPage() {
+  const { chatId } = useParams();
+  const { chat, settings, setSettings, isReady } = useAgentInstance(chatId);
+
+  if (!isReady) {
+    return <LoadingSpinner />;
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <MessageList messages={chat.messages} />
+      <ChatInput
+        onSend={(message) => chat.sendMessage(message)}
+        settings={settings}
+        onSettingsChange={setSettings}
+      />
+    </div>
+  );
+}
+```
+
+### Sending Messages
+
+```tsx
+function ChatInput({ onSend, settings, onSettingsChange }) {
+  const [input, setInput] = useState("");
+
+  const handleSubmit = () => {
+    onSend({ content: input });
+    setInput("");
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="Type a message..."
+      />
+      <button type="submit">Send</button>
+    </form>
+  );
+}
+```
+
+### Model Selection
+
+Update the model through settings:
+
+```tsx
+function ModelSelector({ settings, onSettingsChange }) {
+  const models = useOpenRouterModels();
+
+  return (
+    <select
+      value={settings.model}
+      onChange={(e) => onSettingsChange({ ...settings, model: e.target.value })}
+    >
+      {models.map((model) => (
+        <option key={model.id} value={model.id}>
+          {model.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+### Reasoning Effort
+
+For models that support extended thinking:
+
+```tsx
+function ReasoningSelector({ settings, onSettingsChange }) {
+  const efforts = ["low", "medium", "high"] as const;
+
+  return (
+    <select
+      value={settings.reasoningEffort}
+      onChange={(e) =>
+        onSettingsChange({
+          ...settings,
+          reasoningEffort: e.target.value as "low" | "medium" | "high",
+        })
+      }
+    >
+      {efforts.map((effort) => (
+        <option key={effort} value={effort}>
+          {effort}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+## Displaying Messages
+
+### Message Types
+
+The agent streams different message types:
+
+```tsx
+type Message = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  parts?: MessagePart[];
+};
+
+type MessagePart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; reasoning: string }
+  | { type: "tool-invocation"; toolName: string; args: unknown; result?: unknown };
+```
+
+### Rendering Messages
+
+```tsx
+function MessageItem({ message }) {
+  return (
+    <div className={`message ${message.role}`}>
+      {message.parts?.map((part, i) => (
+        <div key={i}>
+          {part.type === "text" && <p>{part.text}</p>}
+          {part.type === "reasoning" && (
+            <details>
+              <summary>Thinking...</summary>
+              <pre>{part.reasoning}</pre>
+            </details>
+          )}
+          {part.type === "tool-invocation" && (
+            <ToolInvocation
+              name={part.toolName}
+              args={part.args}
+              result={part.result}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Tool Outputs
+
+Extract and display tool outputs:
+
+```tsx
+function extractToolOutputs(messages) {
+  return messages
+    .flatMap((m) => m.parts ?? [])
+    .filter((p) => p.type === "tool-invocation" && p.result)
+    .map((p) => ({ name: p.toolName, output: p.result }));
+}
+
+// Example: Display todos from write_todos tool
+function TodosFromAgent({ messages }) {
+  const outputs = extractToolOutputs(messages);
+  const todos = outputs
+    .filter((o) => o.name === "write_todos")
+    .flatMap((o) => o.output.todos);
+
+  return (
+    <ul>
+      {todos.map((todo) => (
+        <li key={todo.id}>{todo.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Provider Setup
+
+Wrap your chat routes with the provider:
+
+```tsx
+// src/routes/(protected)/chats/route.tsx
+import { AgentsProvider } from "@/providers/agent";
+
+export default function ChatsLayout() {
+  const { token } = useAuth();
+
+  return (
+    <AgentsProvider token={token}>
+      <Outlet />
+    </AgentsProvider>
+  );
+}
+```
+
+## File Structure
+
+```
+apps/web/src/
+├── providers/
+│   └── agent.tsx           # AgentsProvider and hooks
+├── components/chat/
+│   ├── chat-input.tsx      # Message input component
+│   ├── message-item.tsx    # Message display
+│   ├── chat-model-selector.tsx
+│   └── reasoning-effort-selector.tsx
+├── hooks/
+│   ├── use-chats.ts        # Convex chat operations
+│   └── use-openrouter-models.ts
+└── routes/(protected)/chats/
+    ├── route.tsx           # Layout with AgentsProvider
+    └── $chatId.tsx         # Chat page
+```
+
+Next, learn about [Configuration](/docs/agent/configuration).

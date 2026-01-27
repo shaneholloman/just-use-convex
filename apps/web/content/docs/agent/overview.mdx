@@ -1,0 +1,103 @@
+---
+title: Agent Overview
+description: AI chat agent powered by Cloudflare Durable Objects, LangGraph, and Convex
+---
+
+# AI Agent Overview
+
+This template includes a fully-featured AI chat agent built on Cloudflare Durable Objects with LangGraph for stateful conversation management, integrated with Convex for data persistence.
+
+## Key Features
+
+### Stateful Conversations
+
+Each chat session runs as an isolated Cloudflare Durable Object with persistent state:
+
+```ts
+export class AgentWorker extends AIChatAgent<Env, ChatState> {
+  private checkpointer: CloudflareDOCheckpointer | null = null;
+
+  // Each agent instance maintains its own state
+  override async onChatMessage(onFinish, options) {
+    const agent = createDeepAgent({
+      model,
+      systemPrompt: "You are a helpful assistant.",
+      checkpointer: this.getCheckpointer(),
+    });
+    // ...
+  }
+}
+```
+
+### Multi-Model Support
+
+Switch between different LLM providers through OpenRouter:
+
+| Provider | Models |
+|----------|--------|
+| OpenAI | GPT-4o, GPT-4.5, o1, o3 |
+| Anthropic | Claude 3.5 Sonnet, Claude 4 Opus |
+| Google | Gemini 2.0, Gemini 2.5 Pro |
+| DeepSeek | DeepSeek R1, DeepSeek V3 |
+
+### Real-Time Streaming
+
+Responses stream token-by-token using the Vercel AI SDK:
+
+```tsx
+function ChatMessage({ message }) {
+  // Messages stream in real-time
+  return <div>{message.content}</div>;
+}
+```
+
+### Reasoning Models
+
+Extended thinking support for reasoning-capable models:
+
+```ts
+const model = new ChatOpenAI({
+  model: "openai/o3-mini",
+  reasoning: {
+    effort: "medium", // "low" | "medium" | "high"
+  },
+});
+```
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Agent Runtime | Cloudflare Durable Objects |
+| LLM Gateway | OpenRouter API |
+| Orchestration | LangGraph + DeepAgents |
+| State Persistence | DO SQLite + Custom Checkpointer |
+| Streaming | Vercel AI SDK |
+| Backend | Convex |
+| Frontend | React + agents/react |
+
+## How It Works
+
+1. **User sends a message** - The frontend connects to a Durable Object via WebSocket
+2. **Agent processes the message** - LangGraph orchestrates the conversation with checkpointing
+3. **LLM generates response** - OpenRouter routes to the selected model
+4. **Response streams back** - Token-by-token streaming via AI SDK
+5. **State persists** - Conversation history saved in DO SQLite
+
+## Getting Started
+
+The agent requires these environment variables:
+
+```bash
+# OpenRouter API
+OPENROUTER_API_KEY=your_api_key
+OPENROUTER_MODEL=openai/gpt-4o  # Default model
+
+# Convex backend
+CONVEX_URL=your_convex_deployment_url
+
+# Agent URL (for frontend)
+VITE_AGENT_URL=your_agent_worker_url
+```
+
+Continue to [Architecture](/docs/agent/architecture) to understand how the agent system is built.
