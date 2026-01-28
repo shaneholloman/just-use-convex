@@ -112,10 +112,15 @@ function AgentInstanceInner({ chatId, token }: { chatId: string, token: string |
   chatRef.current = chat;
   agentRef.current = agent;
 
+  // Update instance data whenever chat/agent/settings change
   useEffect(() => {
     updateInstanceData(chatId, { chat, agent, settings, setSettings });
-    agent.setState(settings)
-  }, [chatId, chat, settings, setSettings]);
+  }, [chatId, chat, agent, settings, setSettings]);
+
+  // Sync settings to agent only when settings actually changes
+  useEffect(() => {
+    agent.setState(settings);
+  }, [agent, settings]);
 
   return null;
 }

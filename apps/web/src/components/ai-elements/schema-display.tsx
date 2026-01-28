@@ -448,7 +448,7 @@ export const SchemaDisplayExample = ({
 }: SchemaDisplayExampleProps) => (
   <pre
     className={cn(
-      "mx-4 mb-4 overflow-auto rounded-md bg-muted p-4 font-mono text-sm",
+      "mx-4 overflow-auto rounded-md bg-muted p-4 font-mono text-sm",
       className
     )}
     {...props}

@@ -69,7 +69,6 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     const token = await getAuth();
     if (token) {
       ctx.context.convexQueryClient.serverHttpClient?.setAuth(token);
-      console.log("token", token);
       ctx.context.tokenClient.setToken(token);
     }
     return {
