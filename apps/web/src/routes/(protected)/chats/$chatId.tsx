@@ -13,6 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { VirtualMessageList } from "@/components/chat/virtual-message-list";
 import type { QueueTodo } from "@/components/ai-elements/queue";
+import type { ConfirmationProps } from "@/components/ai-elements/confirmation";
 import { useAgentInstance } from "@/providers/agent";
 import { TodosDisplay } from "@/components/chat/todos-display";
 
@@ -35,6 +36,7 @@ function ChatPage() {
   const { chatId } = Route.useParams();
   const { chat, settings, setSettings, isReady } = useAgentInstance(chatId);
   const { groupedModels, models } = useOpenRouterModels();
+  const addToolApprovalResponse = chat?.addToolApprovalResponse!;
 
   const selectedModel = useMemo(
     () => models.find((m: OpenRouterModel) => m.slug === settings.model),
@@ -76,6 +78,10 @@ function ChatPage() {
   const derivedState = useMemo(() => {
     const state = {
       todos: [] as QueueTodo[],
+      todosApproval: undefined as ConfirmationProps['approval'],
+      todosState: undefined as ConfirmationProps['state'] | undefined,
+      todosToolCallId: undefined as string | undefined,
+      todosInput: undefined as { todos?: Array<{ content: string; status: string; id?: string }> } | undefined,
     };
 
     const lastMsg = messages[messages.length - 1];
@@ -83,7 +89,13 @@ function ChatPage() {
 
     for (const part of lastMsg.parts) {
       if (part.type === "tool-write_todos") {
-        const toolPart = part as { input?: { todos?: Array<{ content: string; status: string; id?: string }> }; output?: { todos?: Array<{ content: string; status: string; id?: string }> } };
+        const toolPart = part as {
+          toolCallId?: string;
+          input?: { todos?: Array<{ content: string; status: string; id?: string }> };
+          output?: { todos?: Array<{ content: string; status: string; id?: string }> };
+          state?: ConfirmationProps['state'];
+          approval?: ConfirmationProps['approval'];
+        };
         const todosData = toolPart.output?.todos ?? toolPart.input?.todos;
         if (todosData) {
           state.todos = todosData.map((t) => ({
@@ -92,6 +104,10 @@ function ChatPage() {
             status: t.status as "pending" | "in_progress" | "done",
           }));
         }
+        state.todosApproval = toolPart.approval;
+        state.todosState = toolPart.state;
+        state.todosToolCallId = toolPart.toolCallId;
+        state.todosInput = toolPart.input;
       }
     }
 
@@ -122,7 +138,7 @@ function ChatPage() {
               description="Ask me anything or share files to get started"
             />
           ) : (
-            <VirtualMessageList messages={messages} isStreaming={isStreaming} />
+            <VirtualMessageList messages={messages} isStreaming={isStreaming} toolApprovalResponse={addToolApprovalResponse} />
           )}
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-3 mx-auto w-4xl">
@@ -134,7 +150,12 @@ function ChatPage() {
       </Conversation>
 
       <div className="mx-auto w-4xl">
-        <TodosDisplay todos={derivedState.todos} />
+        <TodosDisplay
+          todos={derivedState.todos}
+          approval={derivedState.todosApproval}
+          state={derivedState.todosState}
+          toolApprovalResponse={addToolApprovalResponse}
+        />
       </div>
       <ChatInput
         onSubmit={handleSubmit}

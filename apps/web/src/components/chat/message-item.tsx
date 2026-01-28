@@ -28,15 +28,27 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import {
+  Confirmation,
+  ConfirmationTitle,
+  ConfirmationRequest,
+  ConfirmationAccepted,
+  ConfirmationRejected,
+  ConfirmationActions,
+  ConfirmationAction,
+} from "@/components/ai-elements/confirmation";
+import {
   Attachments,
   Attachment,
   AttachmentPreview,
 } from "@/components/ai-elements/attachments";
 import { cn } from "@/lib/utils";
+import type { ChatAddToolApproveResponseFunction } from "ai";
+import { Input } from "@/components/ui/input";
 
 export interface MessageItemProps {
   message: UIMessage;
   isStreaming: boolean;
+  toolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
 
 interface TextPartProps {
@@ -76,6 +88,7 @@ const ReasoningPart = memo(function ReasoningPart({ key, part, isStreaming }: Re
 interface ToolPartProps {
   part:  Extract<UIMessage["parts"][number], { type: `tool-${string}` }>;
   partKey: number;
+  toolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
 
 // Extract tool name from type: "tool-write_todos" -> "write_todos"
@@ -88,9 +101,11 @@ function isToolPart(
   return part.type.startsWith("tool-");
 }
 
-const ToolPart = memo(function ToolPart({ part, partKey }: ToolPartProps) {
+const ToolPart = memo(function ToolPart({ part, partKey, toolApprovalResponse }: ToolPartProps) {
   const toolPart = part
   const toolName = getToolName(toolPart.type);
+  const approval = 'approval' in toolPart ? toolPart.approval as Parameters<typeof Confirmation>[0]['approval'] : undefined;
+  const [rejectReason, setRejectReason] = useState<string | undefined>(undefined);
 
   return (
     <Tool key={partKey}>
@@ -99,6 +114,30 @@ const ToolPart = memo(function ToolPart({ part, partKey }: ToolPartProps) {
         <ToolInput input={toolPart.input} />
         <ToolOutput output={toolPart.output} errorText={toolPart.errorText} />
       </ToolContent>
+      <Confirmation approval={approval} state={toolPart.state} className="flex flex-row items-center">
+        <ConfirmationRequest>
+          <Input
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Reason for rejection"
+          />
+          <ConfirmationTitle>This tool requires your approval to run.</ConfirmationTitle>
+          <ConfirmationActions>
+            <ConfirmationAction variant="outline" onClick={() => toolApprovalResponse({ id: approval?.id ?? '', approved: false, reason: rejectReason })}>
+              Reject
+            </ConfirmationAction>
+            <ConfirmationAction onClick={() => toolApprovalResponse({ id: approval?.id ?? '', approved: true, reason: undefined })}>
+              Approve
+            </ConfirmationAction>
+          </ConfirmationActions>
+        </ConfirmationRequest>
+        <ConfirmationAccepted>
+          <ConfirmationTitle>Tool execution approved.</ConfirmationTitle>
+        </ConfirmationAccepted>
+        <ConfirmationRejected>
+          <ConfirmationTitle>Tool execution rejected{approval?.reason ? `: ${approval.reason}` : '.'}</ConfirmationTitle>
+        </ConfirmationRejected>
+      </Confirmation>
     </Tool>
   );
 });
@@ -150,6 +189,7 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 interface ChainOfThoughtPartProps {
   isStreaming: boolean;
   chainGroup: { part: UIMessage["parts"][number]; index: number }[];
+  toolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
 
 const isChainOfThoughtPart = (part: UIMessage["parts"][number]): boolean => {
@@ -174,7 +214,7 @@ const ChainOfThoughtPart = memo(function ChainOfThoughtPart(props: ChainOfThough
             );
           }
           if (isToolPart(p)) {
-            return <ToolPart key={index} part={p} partKey={index} />;
+            return <ToolPart key={index} part={p} partKey={index} toolApprovalResponse={props.toolApprovalResponse} />;
           }
           return null;
         })}
@@ -183,7 +223,7 @@ const ChainOfThoughtPart = memo(function ChainOfThoughtPart(props: ChainOfThough
   );
 });
 
-export const MessageItem = memo(function MessageItem({ message, isStreaming }: MessageItemProps) {
+export const MessageItem = memo(function MessageItem({ message, isStreaming, toolApprovalResponse }: MessageItemProps) {
   const messageText = message.parts
     .filter((part) => part.type === "text")
     .map((part) => (part as Extract<UIMessage["parts"][number], { type: "text" }>).text)
@@ -207,7 +247,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming }: M
       } else {
         if (chainGroup.length > 0) {
           elements.push(
-            <ChainOfThoughtPart key={`chain-${chainGroup[0].index}`} isStreaming={isStreaming} chainGroup={chainGroup} />
+            <ChainOfThoughtPart key={`chain-${chainGroup[0].index}`} isStreaming={isStreaming} chainGroup={chainGroup} toolApprovalResponse={toolApprovalResponse} />
           );
           chainGroup = [];
         }
@@ -226,7 +266,7 @@ export const MessageItem = memo(function MessageItem({ message, isStreaming }: M
     // Flush remaining chain group
     if (chainGroup.length > 0) {
       elements.push(
-        <ChainOfThoughtPart key={`chain-${chainGroup[0].index}`} isStreaming={isStreaming} chainGroup={chainGroup} />
+        <ChainOfThoughtPart key={`chain-${chainGroup[0].index}`} isStreaming={isStreaming} chainGroup={chainGroup} toolApprovalResponse={toolApprovalResponse} />
       );
     }
 

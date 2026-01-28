@@ -4,14 +4,16 @@ import { useEffect, useRef, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import type { UIMessage } from "@ai-sdk/react";
+import type { ChatAddToolApproveResponseFunction } from "ai";
 import { MessageItem } from "./message-item";
 
 interface VirtualMessageListProps {
   messages: UIMessage[];
   isStreaming: boolean;
+  toolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
 
-export function VirtualMessageList({ messages, isStreaming }: VirtualMessageListProps) {
+export function VirtualMessageList({ messages, isStreaming, toolApprovalResponse }: VirtualMessageListProps) {
   const { scrollRef, scrollToBottom } = useStickToBottomContext();
   const prevMessagesLength = useRef(messages.length);
 
@@ -61,6 +63,7 @@ export function VirtualMessageList({ messages, isStreaming }: VirtualMessageList
           <MessageItem
             message={messages[virtualItem.index]!}
             isStreaming={isStreaming && virtualItem.index === messages.length - 1}
+            toolApprovalResponse={toolApprovalResponse}
           />
         </div>
       ))}
