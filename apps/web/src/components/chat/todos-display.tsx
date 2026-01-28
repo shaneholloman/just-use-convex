@@ -11,20 +11,10 @@ import {
   QueueItemContent,
   type QueueTodo,
 } from "@/components/ai-elements/queue";
-import {
-  Confirmation,
-  ConfirmationTitle,
-  ConfirmationRequest,
-  ConfirmationAccepted,
-  ConfirmationRejected,
-  ConfirmationActions,
-  ConfirmationAction,
-  type ConfirmationProps,
-} from "@/components/ai-elements/confirmation";
+import { type ConfirmationProps } from "@/components/ai-elements/confirmation";
 import { memo } from "react";
 import type { ChatAddToolApproveResponseFunction } from "ai";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import { ToolApprovalConfirmation } from "./tool-approval-confirmation";
 
 export interface TodosDisplayProps {
   todos: QueueTodo[];
@@ -37,8 +27,6 @@ export const TodosDisplay = memo(function TodosDisplay({ todos, approval, state,
   if (todos.length === 0) return null;
 
   const activeCount = todos.filter((t) => t.status !== "done").length;
-
-  const [rejectReason, setRejectReason] = useState<string | undefined>(undefined);
 
   return (
     <Queue className="mb-2">
@@ -73,29 +61,13 @@ export const TodosDisplay = memo(function TodosDisplay({ todos, approval, state,
         </QueueSectionContent>
       </QueueSection>
       {state && (
-        <Confirmation approval={approval} state={state} className="flex flex-row items-center">
-          <ConfirmationRequest>
-            <Input
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Reason for rejection"
-            />
-            <ConfirmationActions>
-              <ConfirmationAction variant="outline" onClick={() => toolApprovalResponse({ id: approval?.id ?? '', approved: false, reason: rejectReason })}>
-                Reject
-              </ConfirmationAction>
-              <ConfirmationAction onClick={() => toolApprovalResponse({ id: approval?.id ?? '', approved: true, reason: undefined })}>
-                Approve
-              </ConfirmationAction>
-            </ConfirmationActions>
-          </ConfirmationRequest>
-          <ConfirmationAccepted>
-            <ConfirmationTitle>Tasks approved.</ConfirmationTitle>
-          </ConfirmationAccepted>
-          <ConfirmationRejected>
-            <ConfirmationTitle>Tasks rejected{approval?.reason ? `: ${approval.reason}` : '.'}</ConfirmationTitle>
-          </ConfirmationRejected>
-        </Confirmation>
+        <ToolApprovalConfirmation
+          approval={approval}
+          state={state}
+          toolApprovalResponse={toolApprovalResponse}
+          acceptedTitle="Tasks approved."
+          rejectedTitle="Tasks rejected"
+        />
       )}
     </Queue>
   );

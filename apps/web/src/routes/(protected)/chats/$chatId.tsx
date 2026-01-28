@@ -18,6 +18,29 @@ import { useAgentInstance } from "@/providers/agent";
 import { TodosDisplay } from "@/components/chat/todos-display";
 import type { ChatAddToolApproveResponseFunction } from "ai";
 
+// Types
+type TodosArray = Array<{ content: string; status: string; id?: string }>;
+
+type TodosToolPart = {
+  toolCallId?: string;
+  input?: { todos?: TodosArray };
+  output?: { todos?: TodosArray };
+  state?: ConfirmationProps['state'];
+  approval?: ConfirmationProps['approval'];
+};
+
+type TodosState = {
+  todos: QueueTodo[];
+  todosApproval?: ConfirmationProps['approval'];
+  todosState?: ConfirmationProps['state'];
+  todosToolCallId?: string;
+  todosInput?: { todos?: TodosArray };
+};
+
+// Helpers
+const mapTodoStatus = (status: string): "pending" | "in_progress" | "done" =>
+  (status as "pending" | "in_progress" | "done");
+
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
 });
@@ -91,12 +114,8 @@ function ChatPage() {
   }, [addToolApprovalResponse]);
 
   const derivedState = useMemo(() => {
-    const state = {
-      todos: [] as QueueTodo[],
-      todosApproval: undefined as ConfirmationProps['approval'],
-      todosState: undefined as ConfirmationProps['state'] | undefined,
-      todosToolCallId: undefined as string | undefined,
-      todosInput: undefined as { todos?: Array<{ content: string; status: string; id?: string }> } | undefined,
+    const state: TodosState = {
+      todos: [],
     };
 
     const lastMsg = messages[messages.length - 1];
@@ -104,19 +123,13 @@ function ChatPage() {
 
     for (const part of lastMsg.parts) {
       if (part.type === "tool-write_todos") {
-        const toolPart = part as {
-          toolCallId?: string;
-          input?: { todos?: Array<{ content: string; status: string; id?: string }> };
-          output?: { todos?: Array<{ content: string; status: string; id?: string }> };
-          state?: ConfirmationProps['state'];
-          approval?: ConfirmationProps['approval'];
-        };
+        const toolPart = part as TodosToolPart;
         const todosData = toolPart.output?.todos ?? toolPart.input?.todos;
         if (todosData) {
           state.todos = todosData.map((t) => ({
             id: t.id!,
             title: t.content,
-            status: t.status as "pending" | "in_progress" | "done",
+            status: mapTodoStatus(t.status),
           }));
         }
         state.todosApproval = toolPart.approval;

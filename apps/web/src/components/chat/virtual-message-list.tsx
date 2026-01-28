@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { useStickToBottomContext } from "use-stick-to-bottom";
 import type { UIMessage } from "@ai-sdk/react";
 import type { ChatAddToolApproveResponseFunction } from "ai";
-import { MessageItem } from "./message-item";
+import { MessageItem } from "./message-items";
 
 interface VirtualMessageListProps {
   messages: UIMessage[];
