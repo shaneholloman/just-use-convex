@@ -3,6 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { motion } from "motion/react"
 import { createContext, useContext, useId } from "react"
 
+import { springSnappy } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 
 const TabsIndicatorContext = createContext<{
@@ -96,11 +97,7 @@ function TabsTrigger({
                     ? "bg-foreground group-data-[orientation=horizontal]/tabs:inset-x-0 group-data-[orientation=horizontal]/tabs:bottom-[-5px] group-data-[orientation=horizontal]/tabs:h-0.5 group-data-[orientation=vertical]/tabs:inset-y-0 group-data-[orientation=vertical]/tabs:-right-1 group-data-[orientation=vertical]/tabs:w-0.5"
                     : "inset-0 rounded-md bg-background dark:border-input dark:bg-input/30 border"
                 )}
-                transition={{
-                  type: "spring",
-                  stiffness: 500,
-                  damping: 40,
-                }}
+                transition={springSnappy}
               />
             )}
           </button>
