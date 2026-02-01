@@ -49,8 +49,6 @@ export type BackgroundTask = {
 export type BackgroundTaskResult = {
   backgroundTaskId: string;
   status: "started" | "converted_to_background";
-  toolName: string;
-  message: string;
 };
 
 /** Options for runInBackground helper */
@@ -306,8 +304,6 @@ function runInBackground({
   return {
     backgroundTaskId: task.id,
     status: initialLog ? "converted_to_background" : "started",
-    toolName,
-    message: `Task running in background. Use get_background_task_logs or wait_for_background_task to check progress.`,
   };
 }
 
@@ -467,20 +463,13 @@ Returns the task status, logs, and pagination info.`,
     if (!task) {
       return { error: `Task not found: ${taskId}` };
     }
-    const { logs, total, hasMore } = backgroundTaskStore.getLogs(
-      taskId,
-      offset,
-      limit
-    );
+    const { logs } = backgroundTaskStore.getLogs(taskId, offset, limit);
+    // Strip timestamps from logs for minimal context
+    const minimalLogs = logs.map(({ type, message }) => ({ type, message }));
     return {
       taskId,
-      toolName: task.toolName,
       status: task.status,
-      startedAt: task.startedAt,
-      completedAt: task.completedAt,
-      logs,
-      totalLogs: total,
-      hasMore,
+      logs: minimalLogs,
       ...(task.status === "completed" && { result: task.result }),
       ...(task.status === "failed" && { error: task.error }),
     };
@@ -527,7 +516,6 @@ Returns the final status and result.`,
         return {
           taskId,
           status: task.status,
-          duration: (task.completedAt ?? Date.now()) - task.startedAt,
           ...(task.status === "completed" && { result: task.result }),
           ...(task.status === "failed" && { error: task.error }),
         };
@@ -557,14 +545,7 @@ Attempts to abort the task execution. Only works for tasks that are still runnin
     if (previousStatus === null) {
       return { error: `Task not found: ${taskId}` };
     }
-    return {
-      taskId,
-      cancelled,
-      previousStatus,
-      message: cancelled
-        ? "Task cancelled successfully"
-        : `Cannot cancel task with status: ${previousStatus}`,
-    };
+    return { taskId, cancelled };
   },
 });
 
@@ -588,18 +569,7 @@ Useful for checking what tasks are running or have completed.`,
     }
 
     return {
-      tasks: tasks.map((t) => ({
-        id: t.id,
-        toolName: t.toolName,
-        status: t.status,
-        startedAt: t.startedAt,
-        completedAt: t.completedAt,
-        duration: t.completedAt
-          ? t.completedAt - t.startedAt
-          : Date.now() - t.startedAt,
-        logsCount: t.logs.length,
-      })),
-      total: tasks.length,
+      tasks: tasks.map((t) => ({ id: t.id, status: t.status })),
     };
   },
 });
