@@ -4,9 +4,10 @@ import { AIChatAgent, type OnChatMessageOptions } from "agents/ai-chat-agent";
 import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output } from "ai";
 import type { PlanAgent } from "@voltagent/core";
 import { createAiClient } from "./client";
-import { SYSTEM_PROMPT } from "./prompt";
+import { SYSTEM_PROMPT, TASK_PROMPT } from "./prompt";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "./tools/sandbox";
-import { createWebSearchTool } from "./tools/websearch";
+import { createWebSearchToolkit } from "./tools/websearch";
+import { withBackgroundTaskTools } from "./tools/utils";
 import type { worker } from "../alchemy.run";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
@@ -125,17 +126,20 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       name: "Assistant",
       systemPrompt: SYSTEM_PROMPT,
       model: createAiClient(this.state.model, this.state.reasoningEffort),
-      tools: [
+      tools: withBackgroundTaskTools([
         ...(filesystemBackend ? [createSandboxToolkit(filesystemBackend)] : []),
-        createWebSearchTool()
-      ],
+        createWebSearchToolkit(),
+      ]),
       toolResultEviction: {
         enabled: true,
         tokenLimit: 20000,
       },
+      task: {
+        taskDescription: TASK_PROMPT,
+      },
       filesystem: false,
       maxSteps: 100,
-      ...(this.env.VOLTAGENT_OBSERVABILITY_ENABLED === 'true' ? {
+      ...(this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY ? {
         observability: createVoltAgentObservability({
           serviceName: "just-use-convex-agent",
           serviceVersion: "1.0.0",

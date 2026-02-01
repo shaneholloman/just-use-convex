@@ -1,11 +1,11 @@
 import Exa from "exa-js";
-import { createTool } from "@voltagent/core";
+import { createTool, createToolkit } from "@voltagent/core";
 import { z } from "zod";
 
 const exa = new Exa();
 
-export function createWebSearchTool() {
-  return createTool({
+export function createWebSearchToolkit() {
+  const webSearchTool = createTool({
     name: "web_search",
     description: `Search the web for information using Exa's neural search.
 
@@ -36,17 +36,26 @@ The search returns relevant results with text content, URLs, titles, and publica
       startPublishedDate,
       endPublishedDate,
     }) => {
-      const response = await exa.search(query, {
+      // Validate query is not empty
+      if (!query || query.trim() === "") {
+        return {
+          error: true,
+          message: "Query is required and cannot be empty",
+        };
+      }
+
+      const response = await exa.search(query.trim(), {
         numResults,
         type,
-        category,
-        includeDomains,
-        excludeDomains,
-        startPublishedDate,
-        endPublishedDate,
         contents: {
           text: { maxCharacters: 5000 },
         },
+        // Only include optional params if they have actual values
+        ...(category && { category }),
+        ...(includeDomains?.length && { includeDomains }),
+        ...(excludeDomains?.length && { excludeDomains }),
+        ...(startPublishedDate?.trim() && { startPublishedDate }),
+        ...(endPublishedDate?.trim() && { endPublishedDate }),
       });
 
       const results = response.results.map((result) => ({
@@ -66,6 +75,28 @@ The search returns relevant results with text content, URLs, titles, and publica
       };
     },
   });
+
+  return createToolkit({
+    name: "web_search",
+    description: `Search the web for information using Exa's neural search.
+
+## Source Citations
+
+When using information from web searches, you MUST cite sources inline using numbered references.
+
+Format: Use \`[n]\` where n is the 1-based index of the source from your search results.
+
+Examples:
+- "React 19 introduces a new compiler for automatic memoization [1]."
+- "The API supports both REST and GraphQL endpoints [2][3]."
+
+Rules:
+- Cite sources immediately after the relevant claim or information
+- Use the same number when referencing the same source multiple times
+- Numbers correspond to the order sources appear in search results
+- Only cite sources you actually retrieved via web_search`,
+    tools: [webSearchTool],
+  });
 }
 
-export const webSearch = createWebSearchTool;
+export const webSearchToolkit = createWebSearchToolkit();

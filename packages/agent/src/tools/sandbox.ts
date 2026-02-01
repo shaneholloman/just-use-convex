@@ -12,6 +12,7 @@ import {
 } from "@voltagent/core";
 import { z } from "zod";
 import type { worker } from "../../alchemy.run";
+import { createWrappedTool, type WrappedExecuteOptions } from "./utils";
 
 /**
  * Escape a string for safe use in shell commands with single quotes.
@@ -364,7 +365,7 @@ export function createSandboxToolkit(
   const maxOutputChars = options.maxOutputChars ?? 30000;
   const logDir = options.logDir ?? "/workspace/.logs";
 
-  const bashTool = createTool({
+  const bashTool = createWrappedTool({
     name: "bash",
     description: `Execute bash commands in the sandbox environment.
 
@@ -378,17 +379,24 @@ Use this tool for:
 The working directory is /workspace by default. Commands run in an isolated sandbox environment.
 
 Important:
-- Commands have a default timeout of 120 seconds
-- For long-running commands, consider breaking them into smaller steps
+- Commands have a default timeout of 2 minutes, then auto-convert to background task
+- For known long-running commands, use the background option to run asynchronously from the start
 - Use absolute paths or paths relative to /workspace
 - If output exceeds ${maxOutputChars} characters, it will be written to a log file that you can explore using grep or read tools`,
     parameters: z.object({
       command: z.string().describe("The bash command to execute"),
       cwd: z.string().optional().describe("Working directory for the command (default: /workspace)"),
-      timeout: z.number().optional().describe("Timeout in milliseconds (default: 120000)"),
     }),
-    execute: async ({ command, cwd, timeout }) => {
-      const result = await backend.exec(command, { cwd, timeout });
+    toolCallConfig: {
+      duration: 120000, // 2 minutes default
+      allowAgentSetDuration: true,
+      maxAllowedAgentDuration: 600000, // 10 minutes max
+      allowBackground: true,
+    },
+    execute: async (args, options?: WrappedExecuteOptions) => {
+      const command = args.command as string;
+      const cwd = args.cwd as string | undefined;
+      const result = await backend.exec(command, { cwd, timeout: options?.timeout });
 
       // Format output
       const outputParts: string[] = [];
@@ -406,6 +414,16 @@ Important:
       }
 
       const fullOutput = outputParts.join("\n").trim() || "(no output)";
+
+      // Log progress for background tasks
+      if (options?.log) {
+        if (result.stdout) {
+          options.log({ type: "stdout", message: result.stdout });
+        }
+        if (result.stderr) {
+          options.log({ type: "stderr", message: result.stderr });
+        }
+      }
 
       // Check if output exceeds limit
       if (fullOutput.length > maxOutputChars) {
@@ -426,6 +444,8 @@ Important:
         return {
           success: result.success,
           output: truncatedOutput,
+          stdout: result.stdout,
+          stderr: result.stderr,
           exitCode: result.exitCode,
           truncated: true,
           logFile,
@@ -436,6 +456,8 @@ Important:
       return {
         success: result.success,
         output: fullOutput,
+        stdout: result.stdout,
+        stderr: result.stderr,
         exitCode: result.exitCode,
         truncated: false,
       };

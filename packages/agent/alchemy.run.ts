@@ -31,7 +31,6 @@ export const worker = await Worker("agent-worker", {
     SITE_URL: alchemy.secret(process.env.SITE_URL || "http://localhost:3001"),
     OPENROUTER_API_KEY: alchemy.secret(process.env.OPENROUTER_API_KEY),
     COMPOSIO_API_KEY: alchemy.secret(process.env.COMPOSIO_API_KEY || ''),
-    VOLTAGENT_OBSERVABILITY_ENABLED: alchemy.secret(process.env.VOLTAGENT_OBSERVABILITY_ENABLED || 'true'),
     VOLTAGENT_PUBLIC_KEY: alchemy.secret(process.env.VOLTAGENT_PUBLIC_KEY || ''),
     VOLTAGENT_SECRET_KEY: alchemy.secret(process.env.VOLTAGENT_SECRET_KEY || ''),
     EXA_API_KEY: alchemy.secret(process.env.EXA_API_KEY || ''),
