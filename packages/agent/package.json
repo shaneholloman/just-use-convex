@@ -23,8 +23,10 @@
     "ai": "^6.0.57",
     "alchemy": "^0.83.1",
     "convex": "^1.31.6",
+    "exa-js": "^2.2.0",
     "modal": "^0.6.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250121.0",

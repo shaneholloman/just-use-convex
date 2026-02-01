@@ -1,13 +1,17 @@
 import { routeAgentRequest, type Connection, type ConnectionContext, callable } from "agents";
+export { Sandbox } from "@cloudflare/sandbox";
 import { AIChatAgent, type OnChatMessageOptions } from "agents/ai-chat-agent";
 import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output } from "ai";
-import { type PlanAgent, NodeFilesystemBackend } from "@voltagent/core";
+import type { PlanAgent } from "@voltagent/core";
 import { createAiClient } from "./client";
+import { SYSTEM_PROMPT } from "./prompt";
+import { SandboxFilesystemBackend, createBashTool } from "./sandbox";
 import type { worker } from "../alchemy.run";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { z } from "zod";
+import { webSearch } from '@exalabs/ai-sdk';
 
 // State type for chat settings synced from frontend
 type ChatState = {
@@ -47,7 +51,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         model: createAiClient("openai/gpt-oss-20b"),
         output: Output.object({
           schema: z.object({
-            title: z.string().describe("A short, concise title (max 6 words) for a chat conversation based on the user's first message."),
+            title: z.string().describe("A short, concise title (max 6 words) for a chat conversation based on the user's first message.").max(64).min(1),
           }),
         }),
         prompt: userMessage,
@@ -86,17 +90,22 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   private async _prepAgent(): Promise<PlanAgent> {
-    const { PlanAgent } = await import("@voltagent/core");
-    
-    const filesystemBackend = new NodeFilesystemBackend({
-      rootDir: "/tmp/voltagent",
-      virtualMode: true,
+    const { PlanAgent, createVoltAgentObservability } = await import("@voltagent/core");
+
+    const filesystemBackend = new SandboxFilesystemBackend({
+      sandboxNamespace: this.env.Sandbox,
+      sandboxId: this.name, // Use chat ID as sandbox ID for isolation
+      rootDir: "/workspace",
     });
+
+    // Create bash tool for sandbox command execution
+    const bashTool = createBashTool(filesystemBackend);
 
     const agent = new PlanAgent({
       name: "Assistant",
-      systemPrompt: "You are a helpful assistant.",
+      systemPrompt: SYSTEM_PROMPT,
       model: createAiClient(this.state?.model || this.env.OPENROUTER_MODEL, this.state?.reasoningEffort),
+      tools: [bashTool, { webSearch: webSearch()}],
       filesystem: {
         backend: filesystemBackend,
       },
@@ -104,7 +113,22 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         enabled: true,
         tokenLimit: 20000,
       },
-      maxSteps: 100
+      maxSteps: 100,
+      ...(this.env.VOLTAGENT_OBSERVABILITY_ENABLED === 'true' ? {
+        observability: createVoltAgentObservability({
+          serviceName: "just-use-convex-agent",
+          serviceVersion: "1.0.0",
+          voltOpsSync: {
+            sampling: {
+              strategy: "always"
+            },
+            maxQueueSize: 2048,
+            maxExportBatchSize: 512,
+            scheduledDelayMillis: 5000,
+            exportTimeoutMillis: 30000,
+          },
+        }),
+      } : {}),
     });
     const writeTodos = agent.getTools().find(t => t.name === "write_todos");
     if (writeTodos) {

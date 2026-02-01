@@ -12,16 +12,34 @@
         "name": "agentWorker",
         "class_name": "AgentWorker",
         "script_name": "just-use-convex-agent-worker-barrel"
+      },
+      {
+        "name": "Sandbox",
+        "class_name": "Sandbox"
       }
     ]
   },
+  "r2_buckets": [
+    {
+      "binding": "WORKSPACE_BUCKET",
+      "bucket_name": "just-use-convex-workspaces",
+      "preview_bucket_name": "just-use-convex-workspaces"
+    }
+  ],
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": [
-        "AgentWorker"
+        "AgentWorker",
+        "Sandbox"
       ],
       "new_classes": []
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "image": "/home/barrel/just-use-convex/packages/agent/Dockerfile"
     }
   ]
 }
