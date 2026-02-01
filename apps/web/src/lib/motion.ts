@@ -60,7 +60,7 @@ export const transitionDefault: Transition = {
  * Reference: timing-asymmetric from Emil Kowalski animations
  */
 export const transitionInstant: Transition = {
-  duration: 0.01,
+  duration: 0.08,
 }
 
 /**
@@ -79,11 +79,11 @@ export const transitionInfinite = (duration: number): Transition => ({
 
 /**
  * Standard button tap effect
- * Scale 0.97 + inset shadow for pressed look
+ * Scale 0.99 + inset shadow for pressed look
  * Reference: transform-scale-097 from Emil Kowalski animations
  */
 export const tapButton: TargetAndTransition = {
-  scale: 0.98,
+  scale: 0.99,
   boxShadow: "inset 0 2px 0 0 rgb(0 0 0 / 0.25)",
   transition: transitionInstant,
 }
@@ -102,11 +102,9 @@ export const tapSubtle: TargetAndTransition = {
 
 /**
  * Standard button hover effect
- * Subtle inset shadow at top
+ * No shadow - just for hover state detection
  */
-export const hoverButton: TargetAndTransition = {
-  boxShadow: "inset 0 2px 0 0 rgb(0 0 0 / 0.15)",
-}
+export const hoverButton: TargetAndTransition = {}
 
 /**
  * Scale up hover for cards/containers

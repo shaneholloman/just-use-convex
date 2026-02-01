@@ -45,11 +45,13 @@ export function extractTodosFromMessage(
       const todosData = output?.todos ?? input?.todos;
       return {
         todos: todosData
-          ? todosData.map((t: { content: string; status: string; id?: string }) => ({
-              id: t.id!,
-              title: t.content,
-              status: mapTodoStatus(t.status),
-            }))
+          ? todosData
+              .filter((t): t is { content: string; status: string; id: string } => !!t.id)
+              .map((t) => ({
+                id: t.id,
+                title: t.content,
+                status: mapTodoStatus(t.status),
+              }))
           : [],
         todosApproval: "approval" in part ? part.approval : undefined,
         todosState: part.state,

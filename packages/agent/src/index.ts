@@ -185,7 +185,15 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   override async onStateUpdate(state: ChatState, source: Connection | "server"): Promise<void> {
-    await this._patchAgent();
+    // Only patch agent if model settings actually changed to avoid unnecessary recreation
+    const modelChanged =
+      state.model !== this.state?.model ||
+      state.reasoningEffort !== this.state?.reasoningEffort ||
+      state.yolo !== this.state?.yolo;
+
+    if (modelChanged && this.planAgent) {
+      await this._patchAgent();
+    }
     await super.onStateUpdate(state, source);
   }
 

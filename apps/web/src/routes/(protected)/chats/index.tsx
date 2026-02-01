@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAtomValue } from "jotai";
 import { useChats, useChatsList, useChatStats, type Chat } from "@/hooks/use-chats";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,7 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquare, Plus, MoreVertical, Trash2, Pencil, Pin } from "lucide-react";
+import { SandboxSelector, selectedSandboxIdAtom } from "@/components/sandboxes/sandbox-selector";
+import { MessageSquare, Plus, MoreVertical, Trash2, Pin } from "lucide-react";
 
 export const Route = createFileRoute("/(protected)/chats/")({
   component: ChatsListPage,
@@ -35,11 +37,12 @@ function ChatsListPage() {
   const pinnedChatsQuery = useChatsList({ isPinned: true });
   const unpinnedChatsQuery = useChatsList({ isPinned: false });
   const { data: stats } = useChatStats();
+  const selectedSandboxId = useAtomValue(selectedSandboxIdAtom);
 
   const handleCreateChat = useCallback(async () => {
-    const chat = await createChat({ data: { title: "New Chat" } });
+    const chat = await createChat({ data: { title: "New Chat", sandboxId: selectedSandboxId ?? undefined } });
     navigate({ to: "/chats/$chatId", params: { chatId: chat } });
-  }, [createChat, navigate]);
+  }, [createChat, navigate, selectedSandboxId]);
 
   const handleDeleteChat = useCallback(
     async (chatId: Chat["_id"]) => {
@@ -146,10 +149,13 @@ function ChatsListPage() {
             {total} {total === 1 ? "conversation" : "conversations"}
           </p>
         </div>
-        <Button onClick={handleCreateChat} disabled={isCreating}>
-          <Plus className="size-4 mr-2" />
-          New Chat
-        </Button>
+        <div className="flex items-center gap-2">
+          <SandboxSelector />
+          <Button onClick={handleCreateChat} disabled={isCreating}>
+            <Plus className="size-4 mr-2" />
+            New Chat
+          </Button>
+        </div>
       </div>
 
       {!pinnedChatsQuery.isLoading && !unpinnedChatsQuery.isLoading && !hasAnyChats && (

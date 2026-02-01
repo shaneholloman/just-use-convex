@@ -1,23 +1,33 @@
 # CLAUDE.md
 
 ## Project Overview
-AI-powered chat SaaS template — multi-tenant, real-time, with org/team support. Uses Cloudflare Agents for WebSocket chat state, Convex for reactive backend, TanStack Start for SSR.
+AI-powered chat SaaS template — multi-tenant, real-time, with org/team support. Cloudflare Agents for WebSocket chat state, Convex for reactive backend, TanStack Start for SSR.
 
 ## Tech Stack
 | Layer | Stack |
 |-------|-------|
+| **Runtime** | Bun |
 | **Frontend** | React 19, TanStack Start/Router/Query, Tailwind v4, shadcn/ui (base-mira), Jotai |
 | **Backend** | Convex, Convex Ents (relationships), Better Auth (org plugin) |
-| **Agent** | Cloudflare Workers, AI SDK, OpenRouter |
-| **Build** | Turborepo, Bun, Vite 7 |
+| **Agent** | Cloudflare Workers, Durable Objects, AI SDK, OpenRouter |
+| **Build** | Turborepo, Vite 7 |
 
 ## Monorepo Structure
 ```
-apps/web/          # TanStack Start frontend + Fumadocs
-packages/agent/    # Cloudflare Workers AI agent
-packages/backend/  # Convex backend
-packages/config/   # Shared TS config
-packages/env/      # T3 Env type-safe env vars
+apps/web/              # TanStack Start frontend + Fumadocs
+  src/
+    components/        # UI components
+    providers/         # Context providers (agent.tsx)
+    routes/            # File-based routing
+    lib/               # Utilities
+packages/
+  agent/               # Cloudflare Workers agent
+  backend/             # Convex backend
+    convex/
+      chats/           # Chat-related functions
+      sandboxes/       # Sandbox management
+  config/              # Shared TS config
+  env/                 # T3 Env type-safe env vars
 ```
 
 ## Commands
@@ -27,23 +37,39 @@ bun run build      # Production build
 turbo dev          # Turborepo dev
 ```
 
-## Working Style
+---
 
-**Be concise and direct.** No fluff.
+## Communication Style
 
-**Debugging:**
-- Add minimal, structured logs with prefixes: `[module:action]`
-- Don't spam the console
-- Identify root cause through precise logging
+**Be concise and direct. No fluff. Match the energy.**
 
-**Performance:**
-- Prefer memoization over throttling
-- Isolate streaming state from static components
-- Use `React.memo` strategically for message lists
+User uses casual language ("bro", "dawg", "ugh"). Keep responses terse and actionable. When something breaks, diagnose fast, fix faster.
 
-**Animations:**
-- Keep under 300ms
-- Reference `skills/emilkowal-animations` for timing/easing
+---
+
+## DO
+
+- **Infer types from existing packages** — never create custom types
+- **Check existing patterns** in codebase before implementing
+- **Keep responses terse** and actionable
+- **Use memo with custom comparison** for streaming optimization
+- **Use `useSyncExternalStore`** for shared mutable state
+- **Reference skills** when available (`emilkowal-animations`, `vercel-react-best-practices`)
+- **Use skeleton loaders**, not spinners
+- **Match Tailwind patterns exactly** — don't modify unrelated classes
+- **DRY the code** — reuse existing utilities
+
+## DON'T
+
+- Over-explain or pad responses
+- Create new abstractions when existing ones work
+- Touch Tailwind code that isn't directly relevant
+- Use virtualization unless absolutely necessary
+- Await non-critical operations (like title generation)
+- Add "improvements" beyond what's requested
+- Cast your own types — infer them
+
+---
 
 ## Key Patterns
 
@@ -57,10 +83,12 @@ tableName/index.ts     # zQuery/zMutation exports
 tableName/aggregates.ts # Stats/triggers
 ```
 
-Custom `zQuery`/`zMutation` wrappers inject auth context (`identity.userId`, `activeOrganizationId`, `activeTeamId`) and ents table access.
+- Custom `zQuery`/`zMutation` wrappers inject auth context
+- Use `zInternalMutation` for internal operations
+- Search indexes for paginated queries (chats, sandboxes)
+- Ent relationships (1:many between chats and sandboxes)
 
 ### Frontend Hooks
-Wrap TanStack Query + Convex:
 ```typescript
 export function useChats() {
   const createMutation = useMutation({
@@ -70,6 +98,21 @@ export function useChats() {
   return { createChat: createMutation.mutateAsync };
 }
 ```
+
+### React Performance (Critical)
+Heavy focus on preventing re-renders during AI streaming:
+- Custom memo comparisons (`areMessageItemPropsEqual`)
+- `useSyncExternalStore` for shared state
+- Isolate `useChat`/`useAgent` hooks
+- Content-based comparison vs reference equality
+- Derive state during render, not in effects
+- Functional setState for stable callbacks
+
+### Agent Connection Management
+- Get-or-create pattern for WebSocket connections
+- Maintain connections in memory across route changes
+- Context-based token management (SSR/hydration concerns)
+- AbortController for streaming cancellation
 
 ### Routing
 File-based TanStack Router:
@@ -82,9 +125,17 @@ File-based TanStack Router:
 @convex/*  → ../../packages/backend/convex/*
 ```
 
-## Skills to Reference
-- `emilkowal-animations` — animation timing/easing best practices
-- `vercel-react-best-practices` — re-render optimization patterns
+---
+
+## UI/Animation Notes
+
+- Emil Kowalski style animations — asymmetric timing (instant press, slow release)
+- Keep animations under 300ms
+- Shadow preference: `inset 0 3px 0 0 rgb(0 0 0 / 0.2)`
+- Don't use base UI wrappers — modify raw components directly
+- If animation feels slow, it is
+
+---
 
 ## Common Issues
 
@@ -92,10 +143,13 @@ File-based TanStack Router:
 |-------|-----|
 | Vite 504 (Outdated Optimize Dep) | Restart dev server |
 | CORS with OpenRouter | Use server-side proxy |
-| Streaming disconnects on nav | Implement graceful reconnection |
-| Message list re-renders | Isolate streaming component, memoize aggressively |
+| Streaming disconnects on nav | Implement graceful reconnection, keep connection in memory |
+| Message list re-renders | Isolate streaming component, memo with custom comparison |
+| Infinite re-renders | Check effect dependencies, derive state during render |
+| Connection not preserved | Get-or-create pattern, don't spawn new connections on route change |
 
-## UI Notes
-- Don't use base UI wrappers — modify raw components directly
-- Shadow preference: `inset 0 3px 0 0 rgb(0 0 0 / 0.2)`
-- Animation timing matters — if it feels slow, it probably is
+---
+
+## Skills to Reference
+- `emilkowal-animations` — animation timing/easing
+- `vercel-react-best-practices` — re-render optimization

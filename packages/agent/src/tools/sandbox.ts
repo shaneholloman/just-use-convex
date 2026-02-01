@@ -40,12 +40,20 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
     return `${this.rootDir}/${path}`.replace(/\/+/g, "/");
   }
 
+  /**
+   * Escape a string for safe use in shell commands with single quotes.
+   * Handles embedded single quotes by ending the quote, adding escaped quote, and resuming.
+   */
+  private escapeShellArg(arg: string): string {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+
   async lsInfo(path: string): Promise<FileInfo[]> {
     const resolvedPath = this.resolvePath(path);
 
     try {
       const result = await this.sandbox.exec(
-        `ls -la --time-style=+%Y-%m-%dT%H:%M:%S ${resolvedPath} 2>/dev/null || echo "[]"`
+        `ls -la --time-style=+%Y-%m-%dT%H:%M:%S ${this.escapeShellArg(resolvedPath)} 2>/dev/null || echo "[]"`
       );
 
       if (!result.success || !result.stdout.trim()) {
@@ -149,9 +157,9 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
     let cmd: string;
     if (glob) {
       // Use find with grep for glob patterns
-      cmd = `find "${searchPath}" -type f -name "${glob}" -exec grep -nH "${pattern}" {} \\; 2>/dev/null || true`;
+      cmd = `find ${this.escapeShellArg(searchPath)} -type f -name ${this.escapeShellArg(glob)} -exec grep -nH ${this.escapeShellArg(pattern)} {} \\; 2>/dev/null || true`;
     } else {
-      cmd = `grep -rnH "${pattern}" "${searchPath}" 2>/dev/null || true`;
+      cmd = `grep -rnH ${this.escapeShellArg(pattern)} ${this.escapeShellArg(searchPath)} 2>/dev/null || true`;
     }
 
     const result = await this.sandbox.exec(cmd);
@@ -182,7 +190,7 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
     const searchPath = path ? this.resolvePath(path) : this.rootDir;
 
     const result = await this.sandbox.exec(
-      `find "${searchPath}" -name "${pattern}" -printf '%p\\t%s\\t%T@\\t%y\\n' 2>/dev/null || true`
+      `find ${this.escapeShellArg(searchPath)} -name ${this.escapeShellArg(pattern)} -printf '%p\\t%s\\t%T@\\t%y\\n' 2>/dev/null || true`
     );
 
     if (!result.stdout.trim()) {

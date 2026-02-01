@@ -45,24 +45,26 @@ export const ToolApprovalConfirmation = memo(function ToolApprovalConfirmation({
         <ConfirmationActions>
           <ConfirmationAction
             variant="outline"
-            onClick={() =>
+            onClick={() => {
+              if (!approval?.id) return;
               toolApprovalResponse({
-                id: approval?.id ?? "",
+                id: approval.id,
                 approved: false,
                 reason: rejectReason,
-              })
-            }
+              });
+            }}
           >
             Reject
           </ConfirmationAction>
           <ConfirmationAction
-            onClick={() =>
+            onClick={() => {
+              if (!approval?.id) return;
               toolApprovalResponse({
-                id: approval?.id ?? "",
+                id: approval.id,
                 approved: true,
                 reason: undefined,
-              })
-            }
+              });
+            }}
           >
             Approve
           </ConfirmationAction>
