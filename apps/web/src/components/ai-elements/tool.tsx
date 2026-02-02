@@ -41,11 +41,6 @@ export type ToolHeaderProps = {
       state: DynamicToolUIPart["state"];
       toolName: string;
     }
-  | {
-      type: `tool-${string}`;
-      state: ToolUIPart["state"] | DynamicToolUIPart["state"];
-      toolName?: string;
-    }
 );
 
 export const getStatusBadge = (status: ToolPart["state"]) => {

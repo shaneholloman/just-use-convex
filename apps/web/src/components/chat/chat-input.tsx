@@ -112,7 +112,7 @@ function AttachmentButton() {
   const attachments = usePromptInputAttachments();
 
   return (
-    <PromptInputButton onClick={() => attachments.openFileDialog()}>
+    <PromptInputButton onClick={() => attachments.openFileDialog()} size="icon-xs">
       <PaperclipIcon className="size-4" />
     </PromptInputButton>
   );
