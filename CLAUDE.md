@@ -143,6 +143,17 @@ File-based TanStack Router:
 - Always prefer using existing shadcn components, i have added em all
 ---
 
+## Code Patterns
+
+- avoid defining new types, infer and reuse exsisting types form other files / by importing them from the relevant package
+- always use convex ents for convex related stuff
+- whenever implementing something for convex, analyze adjecent and relevant files for similar pattern implementation
+
+## Background & Subagents
+
+- for anything related to implementation or research make use of background subagents
+- parallelize as much stuff you can, todos -> each todo is a subagent, make them background whenever possible
+
 ## Common Issues
 
 | Issue | Fix |
