@@ -26,6 +26,21 @@ export function extractMessageFiles(
     .map((part) => part as Extract<UIMessage["parts"][number], { type: "file" }>);
 }
 
+// AI SDK todo structure (from tool input)
+interface AITodo {
+  id?: string;
+  content: string;
+  status: "pending" | "in_progress" | "done";
+}
+
+function mapAITodoToQueueTodo(todo: AITodo, index: number): QueueTodo {
+  return {
+    id: todo.id ?? `todo-${index}`,
+    title: todo.content,
+    status: todo.status,
+  };
+}
+
 export function extractTodosFromMessage(
   message: UIMessage,
   isLastAssistantMessage: boolean
@@ -36,14 +51,16 @@ export function extractTodosFromMessage(
 
   for (const part of message.parts) {
     if (isToolPart(part) && part.type === "tool-write_todos") {
-      const input = part.input as { todos?: QueueTodo[] } | undefined;
-      const output = part.output as { todos?: QueueTodo[] } | undefined;
+      const input = part.input as { todos?: AITodo[] } | undefined;
+      const output = part.output as { todos?: AITodo[] } | undefined;
+      const rawTodos = output?.todos ?? input?.todos ?? [];
+      const todos = rawTodos.map(mapAITodoToQueueTodo);
       return {
-        todos: output?.todos ?? input?.todos ?? [],
+        todos,
         todosApproval: "approval" in part ? part.approval : undefined,
         todosState: part.state,
         todosToolCallId: part.toolCallId,
-        todosInput: input,
+        todosInput: { todos },
       };
     }
   }

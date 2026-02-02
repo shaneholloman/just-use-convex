@@ -14,7 +14,7 @@ import {
   createConvexAdapter,
   parseTokenFromUrl,
   type ConvexAdapter,
-} from "@just-use-convex/backend/convex/lib/convex-adapter";
+} from "@just-use-convex/backend/convex/lib/convexAdapter";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { z } from "zod";
