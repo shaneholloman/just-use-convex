@@ -171,14 +171,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     const writeTodos = agent.getTools().find(t => t.name === "write_todos");
     if (writeTodos) {
-      // Wrap with background task support (30 second timeout, 30 minute max duration)
-      patchToolWithBackgroundSupport(writeTodos, {
-        duration: 30000,
-        allowAgentSetDuration: true,
-        maxAllowedAgentDuration: 1800000, // 30 minutes
-        allowBackground: true,
-      });
-
       // Add approval requirement when not in yolo mode
       if (!this.state?.yolo) {
         Object.defineProperty(writeTodos, 'needsApproval', {
@@ -192,6 +184,17 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
           configurable: true,
         });
       }
+    }
+
+    const tasks = agent.getTools().find(t => t.name === "task");
+    if (tasks) {
+      console.log("Patching tasks tool with background support", tasks.parameters.shape);
+      patchToolWithBackgroundSupport(tasks, {
+        duration: 30000,
+        allowAgentSetDuration: true,
+        maxAllowedAgentDuration: 1800000, // 30 minutes
+        allowBackground: true,
+      });
     }
 
     const model = this.state.model;

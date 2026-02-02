@@ -336,6 +336,33 @@ function resolveConfig(config: ToolCallConfig): ResolvedConfig {
   };
 }
 
+function augmentParametersSchema(
+  shape: ZodRawShape,
+  config: ResolvedConfig
+): ZodObject<ZodRawShape> {
+  const augmentedShape: ZodRawShape = { ...shape };
+
+  if (config.allowAgentSetDuration) {
+    augmentedShape.timeout = z
+      .number()
+      .optional()
+      .describe(
+        `Optional timeout in milliseconds (max: ${config.maxAllowedAgentDuration}ms). Default: ${config.duration}ms`
+      );
+  }
+
+  if (config.allowBackground) {
+    augmentedShape.background = z
+      .boolean()
+      .optional()
+      .describe(
+        "Set to true to run this tool in the background. Returns immediately with a task ID."
+      );
+  }
+
+  return z.object(augmentedShape);
+}
+
 function createWrappedExecute(
   toolName: string,
   originalExecute: (args: Record<string, unknown>, opts?: ToolExecuteOptions) => unknown | Promise<unknown>,
@@ -423,33 +450,10 @@ export function createWrappedTool(options: WrappedToolOptions): BaseTool {
   const { name, description, toolCallConfig = {}, parameters, execute } = options;
   const config = resolveConfig(toolCallConfig);
 
-  // Build augmented schema
-  const augmentedShape: ZodRawShape = { ...parameters.shape };
-
-  if (config.allowAgentSetDuration) {
-    augmentedShape.timeout = z
-      .number()
-      .optional()
-      .describe(
-        `Optional timeout in milliseconds (max: ${config.maxAllowedAgentDuration}ms). Default: ${config.duration}ms`
-      );
-  }
-
-  if (config.allowBackground) {
-    augmentedShape.background = z
-      .boolean()
-      .optional()
-      .describe(
-        "Set to true to run this tool in the background. Returns immediately with a task ID."
-      );
-  }
-
-  const augmentedParameters = z.object(augmentedShape);
-
   return createTool({
     name,
     description,
-    parameters: augmentedParameters,
+    parameters: augmentParametersSchema(parameters.shape, config),
     execute: createWrappedExecute(name, execute ?? (() => undefined), config),
   });
 }
@@ -649,7 +653,7 @@ export function withBackgroundTaskTools<T extends ToolOrToolkit>(
 }
 
 /**
- * Patches an existing tool's execute function to add background task support.
+ * Patches an existing tool's execute function and parameters to add background task support.
  * Uses Object.defineProperty to modify the tool in-place.
  *
  * @param tool - The tool to patch
@@ -659,7 +663,7 @@ export function withBackgroundTaskTools<T extends ToolOrToolkit>(
  * ```ts
  * const writeTodos = agent.getTools().find(t => t.name === "write_todos");
  * if (writeTodos) {
- *   patchToolWithBackgroundSupport(writeTodos, { duration: 30000 });
+ *   patchToolWithBackgroundSupport(writeTodos, { duration: 30000, allowBackground: true });
  * }
  * ```
  */
@@ -670,9 +674,25 @@ export function patchToolWithBackgroundSupport(
   const originalExecute = tool.execute;
   if (!originalExecute) return;
 
+  const resolvedConfig = resolveConfig(config);
+
+  // Patch execute function
   Object.defineProperty(tool, "execute", {
-    value: createWrappedExecute(tool.name, originalExecute, resolveConfig(config)),
+    value: createWrappedExecute(tool.name, originalExecute, resolvedConfig),
     writable: true,
     configurable: true,
   });
+
+  // Patch parameters schema to include timeout/background fields
+  const originalParams = tool.parameters;
+  if (originalParams && typeof originalParams === "object" && "shape" in originalParams) {
+    Object.defineProperty(tool, "parameters", {
+      value: augmentParametersSchema(
+        (originalParams as ZodObject<ZodRawShape>).shape,
+        resolvedConfig
+      ),
+      writable: true,
+      configurable: true,
+    });
+  }
 }
