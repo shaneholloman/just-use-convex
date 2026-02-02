@@ -9,7 +9,11 @@ import { SandboxFilesystemBackend, createSandboxToolkit } from "./tools/sandbox"
 import { createWebSearchToolkit } from "./tools/websearch";
 import { withBackgroundTaskTools, patchToolWithBackgroundSupport } from "./tools/utils";
 import type { worker } from "../alchemy.run";
-import { ConvexHttpClient } from "convex/browser";
+import {
+  createConvexAdapter,
+  parseTokenFromUrl,
+  type ConvexAdapter,
+} from "@just-use-convex/backend/convex/lib/convex-adapter";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { z } from "zod";
@@ -42,14 +46,14 @@ export default {
 };
 
 export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
-  private convexClient: ConvexHttpClient | null = null;
+  private convexAdapter: ConvexAdapter | null = null;
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
   private lastAppliedModel: string | null = null;
   private lastAppliedReasoningEffort: "low" | "medium" | "high" | undefined = undefined;
 
   private async generateTitle(userMessage: string): Promise<void> {
-    if (!this.convexClient) return;
+    if (!this.convexAdapter) return;
 
     try {
       const { output } = await generateText({
@@ -64,7 +68,11 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
       const title = output.title;
       if (title) {
-        await this.convexClient.mutation(api.chats.index.update, {
+        // Use the correct function based on token type
+        const updateFn = this.convexAdapter.getTokenType() === "ext"
+          ? api.chats.index.updateExt
+          : api.chats.index.update;
+        await this.convexAdapter.mutation(updateFn, {
           _id: this.name as Id<"chats">,
           patch: { title },
         });
@@ -76,7 +84,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   
   private async _init(request: Request): Promise<void> {
     const url = new URL(request.url);
-    const token = url.searchParams.get('token');
     const model = url.searchParams.get('model');
     const reasoningEffort = url.searchParams.get('reasoningEffort') as "low" | "medium" | "high" | undefined;
     const yolo = url.searchParams.get('yolo') === 'true';
@@ -97,14 +104,18 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     }
 
     // Only require token on first connection
-    if (!this.convexClient) {
-      if (!token) {
+    if (!this.convexAdapter) {
+      const tokenConfig = parseTokenFromUrl(url);
+      if (!tokenConfig) {
         throw new Error("Unauthorized: No token provided");
       }
-      this.convexClient = new ConvexHttpClient(this.env.CONVEX_URL);
-      this.convexClient.setAuth(token);
+      this.convexAdapter = await createConvexAdapter(this.env.CONVEX_URL, tokenConfig);
 
-      const chat = await this.convexClient.query(api.chats.index.get, {
+      // Use the correct function based on token type
+      const getFn = this.convexAdapter.getTokenType() === "ext"
+        ? api.chats.index.getExt
+        : api.chats.index.get;
+      const chat = await this.convexAdapter.query(getFn, {
         _id: this.name as Id<"chats">
       });
       if (!chat) {
@@ -278,10 +289,15 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     try {
       // Update chat timestamp (fire and forget)
-      this.convexClient?.mutation(api.chats.index.update, {
-        _id: this.name as Id<"chats">,
-        patch: {},
-      });
+      if (this.convexAdapter) {
+        const updateFn = this.convexAdapter.getTokenType() === "ext"
+          ? api.chats.index.updateExt
+          : api.chats.index.update;
+        this.convexAdapter.mutation(updateFn, {
+          _id: this.name as Id<"chats">,
+          patch: {},
+        });
+      }
 
       // Generate title for first message (fire and forget)
       if (this.messages.length === 1) {
