@@ -8,7 +8,7 @@ import { SYSTEM_PROMPT, TASK_PROMPT } from "./prompt";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "./tools/sandbox";
 import { createWebSearchToolkit } from "./tools/websearch";
 import { createAskUserToolkit } from "./tools/ask-user";
-import { withBackgroundTaskTools, patchToolWithBackgroundSupport } from "./tools/utils";
+import { BackgroundTaskStore, withBackgroundTaskTools, patchToolWithBackgroundSupport } from "./tools/utils";
 import type { worker } from "../alchemy.run";
 import {
   createConvexAdapter,
@@ -89,6 +89,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   private sandboxBackend: SandboxFilesystemBackend | null = null;
   private lastAppliedModel: string | null = null;
   private lastAppliedReasoningEffort: "low" | "medium" | "high" | undefined = undefined;
+  private backgroundTaskStore = new BackgroundTaskStore();
 
   private async saveFilesToSandbox(messages: UIMessage[]): Promise<void> {
     if (!this.sandboxBackend) return;
@@ -209,10 +210,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       systemPrompt: SYSTEM_PROMPT,
       model: createAiClient(this.state.model, this.state.reasoningEffort),
       tools: withBackgroundTaskTools([
-        ...(filesystemBackend ? [createSandboxToolkit(filesystemBackend)] : []),
+        ...(filesystemBackend ? [createSandboxToolkit(filesystemBackend, { store: this.backgroundTaskStore })] : []),
         createWebSearchToolkit(),
         createAskUserToolkit(),
-      ]),
+      ], this.backgroundTaskStore),
       toolResultEviction: {
         enabled: true,
         tokenLimit: 20000,
@@ -294,7 +295,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     const tasks = agent.getTools().find(t => t.name === "task");
     if (tasks) {
-      patchToolWithBackgroundSupport(tasks, {
+      patchToolWithBackgroundSupport(tasks, this.backgroundTaskStore, {
         duration: 30000,
         allowAgentSetDuration: true,
         maxAllowedAgentDuration: 1800000, // 30 minutes

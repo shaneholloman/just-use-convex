@@ -12,7 +12,7 @@ import {
 } from "@voltagent/core";
 import { z } from "zod";
 import type { worker } from "../../alchemy.run";
-import { createWrappedTool, type WrappedExecuteOptions } from "./utils";
+import { BackgroundTaskStore, createWrappedTool, type WrappedExecuteOptions } from "./utils";
 
 /**
  * Escape a string for safe use in shell commands with single quotes.
@@ -354,16 +354,16 @@ When writing or modifying code:
 `;
 
 export interface SandboxToolkitOptions {
+  store: BackgroundTaskStore;
   maxOutputChars?: number;
   logDir?: string;
 }
 
 export function createSandboxToolkit(
   backend: SandboxFilesystemBackend,
-  options: SandboxToolkitOptions = {}
+  options: SandboxToolkitOptions
 ): Toolkit {
-  const maxOutputChars = options.maxOutputChars ?? 30000;
-  const logDir = options.logDir ?? "/workspace/.logs";
+  const { store, maxOutputChars = 30000, logDir = "/workspace/.logs" } = options;
 
   const bashTool = createWrappedTool({
     name: "bash",
@@ -387,6 +387,7 @@ Important:
       command: z.string().describe("The bash command to execute"),
       cwd: z.string().optional().describe("Working directory for the command (default: /workspace)"),
     }),
+    store,
     toolCallConfig: {
       duration: 120000, // 2 minutes default
       allowAgentSetDuration: true,
