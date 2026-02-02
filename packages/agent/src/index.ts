@@ -188,7 +188,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     const tasks = agent.getTools().find(t => t.name === "task");
     if (tasks) {
-      console.log("Patching tasks tool with background support", tasks.parameters.shape);
       patchToolWithBackgroundSupport(tasks, {
         duration: 30000,
         allowAgentSetDuration: true,

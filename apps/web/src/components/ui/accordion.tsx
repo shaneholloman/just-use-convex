@@ -1,9 +1,7 @@
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion"
-import { motion } from "motion/react"
 
-import { springExpand } from "@/lib/motion"
 import { cn } from "@/lib/utils"
-import { ChevronDownIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 function Accordion({ className, ...props }: AccordionPrimitive.Root.Props) {
   return (
@@ -38,20 +36,12 @@ function AccordionTrigger({
           "**:data-[slot=accordion-trigger-icon]:text-muted-foreground gap-6 p-2 text-left text-xs/relaxed font-medium hover:underline **:data-[slot=accordion-trigger-icon]:ml-auto **:data-[slot=accordion-trigger-icon]:size-4 group/accordion-trigger relative flex flex-1 items-start justify-between border border-transparent transition-all outline-none disabled:pointer-events-none disabled:opacity-50",
           className
         )}
-        render={(renderProps, state) => (
-          <button {...renderProps}>
-            {children}
-            <motion.span
-              data-slot="accordion-trigger-icon"
-              animate={{ rotate: state.open ? 180 : 0 }}
-              transition={springExpand}
-            >
-              <ChevronDownIcon className="pointer-events-none shrink-0" />
-            </motion.span>
-          </button>
-        )}
         {...props}
-      />
+      >
+        {children}
+        <ChevronDownIcon data-slot="accordion-trigger-icon" className="pointer-events-none shrink-0 group-aria-expanded/accordion-trigger:hidden" />
+        <ChevronUpIcon data-slot="accordion-trigger-icon" className="pointer-events-none hidden shrink-0 group-aria-expanded/accordion-trigger:inline" />
+      </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )
 }

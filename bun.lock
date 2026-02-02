@@ -6,21 +6,21 @@
       "name": "just-use-convex",
       "dependencies": {
         "@just-use-convex/env": "workspace:*",
-        "dotenv": "catalog:",
-        "zod": "catalog:",
+        "dotenv": "^17.2.3",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@just-use-convex/config": "workspace:*",
-        "@types/node": "^25.0.10",
-        "turbo": "^2.7.6",
-        "typescript": "catalog:",
+        "@types/node": "^25.1.0",
+        "turbo": "^2.8.1",
+        "typescript": "^5.9.3",
       },
     },
     "apps/web": {
       "name": "web",
       "dependencies": {
         "@ai-sdk/react": "^3.0.51",
-        "@base-ui/react": "^1.0.0",
+        "@base-ui/react": "^1.1.0",
         "@cloudflare/ai-chat": "^0.0.4",
         "@convex-dev/better-auth": "catalog:",
         "@convex-dev/react-query": "^0.1.0",
@@ -69,7 +69,7 @@
         "react": "19.2.3",
         "react-day-picker": "^9.13.0",
         "react-dom": "19.2.3",
-        "react-resizable-panels": "^4.4.1",
+        "react-resizable-panels": "^4.5.8",
         "recharts": "2.15.4",
         "shadcn": "^3.6.2",
         "shiki": "^3.21.0",
@@ -2638,7 +2638,7 @@
 
     "react-remove-scroll-bar": ["react-remove-scroll-bar@2.3.8", "", { "dependencies": { "react-style-singleton": "^2.2.2", "tslib": "^2.0.0" }, "peerDependencies": { "@types/react": "*", "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" }, "optionalPeers": ["@types/react"] }, "sha512-9r+yi9+mgU33AKcj6IbT9oRCO78WriSj6t/cF8DWBZJ9aOGPOTEDvdUDz1FwKim7QXWwmHqtdHnRJfhAxEG46Q=="],
 
-    "react-resizable-panels": ["react-resizable-panels@4.5.2", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-PJyyR41poi1O1MvvQzDVtEBRq1x7B/9jB6yoFbm67pm8AvPUUwhljFtxfhaYy8klsmkQ6AvxZgDxXTkDl4vy4Q=="],
+    "react-resizable-panels": ["react-resizable-panels@4.5.8", "", { "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" } }, "sha512-X2S5YoYWbjd7Ove6e6T/kzOrjiUD6ccz55a+XW0H3JXbrPb+Gmz7YRAJy4ysOkua/U5jSOG9SoySbebMBjtQJQ=="],
 
     "react-smooth": ["react-smooth@4.0.4", "", { "dependencies": { "fast-equals": "^5.0.1", "prop-types": "^15.8.1", "react-transition-group": "^4.4.5" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-gnGKTpYwqL0Iii09gHobNolvX4Kiq4PKx6eWBCYYix+8cdw+cGo3do906l1NBPKkSWx1DghC1dlWG9L2uGd61Q=="],
 
