@@ -79,7 +79,6 @@ export const ChatInput = memo(function ChatInput({
     <div className="pb-1 mx-auto w-4xl">
       <PromptInput
         onSubmit={({ text, files }) => onSubmit({ text, files })}
-        accept="image/*,application/pdf"
         multiple
       >
         <PromptInputAttachmentsDisplay />

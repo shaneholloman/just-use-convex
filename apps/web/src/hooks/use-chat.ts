@@ -3,17 +3,13 @@ import type { UIMessage } from "@ai-sdk/react";
 import type { ChatAddToolApproveResponseFunction, FileUIPart } from "ai";
 import type { useAgentChat } from "@cloudflare/ai-chat/react";
 import type { TodosState } from "@/components/chat/message-list";
+import type { QueueTodo } from "@/components/ai-elements/queue";
 import { isToolPart } from "@/components/chat/message-items/tool-part";
 
 type AgentChatInstance = ReturnType<typeof useAgentChat>;
 type AgentConnection = {
   call: (method: string, args?: unknown[]) => Promise<unknown>;
 } | null;
-
-type TodosArray = Array<{ content: string; status: string; id?: string }>;
-
-const mapTodoStatus = (status: string): "pending" | "in_progress" | "done" =>
-  status as "pending" | "in_progress" | "done";
 
 export function extractMessageText(message: UIMessage): string {
   return message.parts
@@ -40,19 +36,10 @@ export function extractTodosFromMessage(
 
   for (const part of message.parts) {
     if (isToolPart(part) && part.type === "tool-write_todos") {
-      const input = part.input as { todos?: TodosArray } | undefined;
-      const output = part.output as { todos?: TodosArray } | undefined;
-      const todosData = output?.todos ?? input?.todos;
+      const input = part.input as { todos?: QueueTodo[] } | undefined;
+      const output = part.output as { todos?: QueueTodo[] } | undefined;
       return {
-        todos: todosData
-          ? todosData
-              .filter((t): t is { content: string; status: string; id: string } => !!t.id)
-              .map((t) => ({
-                id: t.id,
-                title: t.content,
-                status: mapTodoStatus(t.status),
-              }))
-          : [],
+        todos: output?.todos ?? input?.todos ?? [],
         todosApproval: "approval" in part ? part.approval : undefined,
         todosState: part.state,
         todosToolCallId: part.toolCallId,

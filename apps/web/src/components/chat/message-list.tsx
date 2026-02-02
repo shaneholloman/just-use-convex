@@ -14,14 +14,12 @@ import {
   findPrecedingUserMessageId,
 } from "@/hooks/use-chat";
 
-type TodosArray = Array<{ content: string; status: string; id?: string }>;
-
 export type TodosState = {
   todos: QueueTodo[];
   todosApproval?: ConfirmationProps['approval'];
   todosState?: ConfirmationProps['state'];
   todosToolCallId?: string;
-  todosInput?: { todos?: TodosArray };
+  todosInput?: { todos?: QueueTodo[] };
 };
 
 
