@@ -303,6 +303,18 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       });
     }
 
+    // Patch task subagent models to match the main agent's model
+    const subagents = agent.getSubAgents();
+    for (const subagent of subagents) {
+      if (subagent && typeof subagent === 'object' && 'model' in subagent) {
+        Object.defineProperty(subagent, 'model', {
+          value: createAiClient(this.state.model, this.state.reasoningEffort),
+          writable: true,
+          configurable: true,
+        });
+      }
+    }
+
     const model = this.state.model;
     const reasoningEffort = this.state.reasoningEffort;
 
