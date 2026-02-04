@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState } from "react";
 import { useAtom } from "jotai";
-import { useSandboxes, useSandboxesList, type Sandbox } from "@/hooks/use-sandboxes";
+import { useSandbox, useSandboxes, useSandboxesList, type Sandbox } from "@/hooks/use-sandboxes";
 import { selectedSandboxIdAtom } from "@/store/sandbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,9 +37,10 @@ export function SandboxSelector() {
   const [description, setDescription] = useState("");
   const [selectedSandboxId, setSelectedSandboxId] = useAtom(selectedSandboxIdAtom);
 
-  const selectedSandbox = sandboxesQuery.results?.find(
-    (s: Sandbox) => s._id === selectedSandboxId
-  );
+  const selectedSandboxQuery = useSandbox(selectedSandboxId ?? undefined);
+  const selectedSandbox =
+    selectedSandboxQuery.data ??
+    sandboxesQuery.results?.find((s: Sandbox) => s._id === selectedSandboxId);
 
   const canLoadMore = sandboxesQuery.status === "CanLoadMore";
   const isLoadingMore = sandboxesQuery.status === "LoadingMore";

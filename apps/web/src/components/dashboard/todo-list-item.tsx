@@ -16,10 +16,17 @@ export function TodoListItem({ todo, onOpen, onStatusChange }: TodoListItemProps
   const StatusIcon = statusIcons[status];
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className="flex w-full items-center gap-3 p-4 hover:bg-muted/50 transition-colors border-b text-left"
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <Button
         variant="ghost"
@@ -59,6 +66,6 @@ export function TodoListItem({ todo, onOpen, onStatusChange }: TodoListItemProps
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 }

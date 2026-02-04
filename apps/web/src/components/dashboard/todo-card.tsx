@@ -38,10 +38,17 @@ export function TodoCard({
   const nextColumn = currentIndex < columns.length - 1 ? columns[currentIndex + 1] : null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className="group flex w-full flex-col gap-2 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors text-left"
       onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div className="flex items-start gap-2">
         <Button
@@ -124,6 +131,6 @@ export function TodoCard({
           )}
         </div>
       </div>
-    </button>
+    </div>
   );
 }

@@ -31,7 +31,8 @@ export const ToolApprovalConfirmation = memo(function ToolApprovalConfirmation({
   rejectedTitle = "Rejected",
   className = "flex flex-row items-center",
 }: ToolApprovalConfirmationProps) {
-  const [rejectReason, setRejectReason] = useState<string | undefined>(undefined);
+  const [rejectReason, setRejectReason] = useState("");
+  const isDisabled = !approval?.id;
 
   return (
     <Confirmation approval={approval} state={state} className={className}>
@@ -40,11 +41,13 @@ export const ToolApprovalConfirmation = memo(function ToolApprovalConfirmation({
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           placeholder="Reason for rejection"
+          disabled={isDisabled}
         />
         {requestTitle && <ConfirmationTitle>{requestTitle}</ConfirmationTitle>}
         <ConfirmationActions>
           <ConfirmationAction
             variant="outline"
+            disabled={isDisabled}
             onClick={() => {
               if (!approval?.id) return;
               toolApprovalResponse({
@@ -57,6 +60,7 @@ export const ToolApprovalConfirmation = memo(function ToolApprovalConfirmation({
             Reject
           </ConfirmationAction>
           <ConfirmationAction
+            disabled={isDisabled}
             onClick={() => {
               if (!approval?.id) return;
               toolApprovalResponse({

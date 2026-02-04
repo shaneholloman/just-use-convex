@@ -24,6 +24,8 @@ export function TodoMemberSelect({
   const selectedMembers = selectedMemberIds
     .map((memberId) => members.find((m) => m.id === memberId))
     .filter(Boolean) as Member[];
+  const displayedCount = Math.min(selectedMembers.length, 3);
+  const hiddenCount = Math.max(selectedMemberIds.length - displayedCount, 0);
 
   const handleToggleMember = (memberId: string) => {
     const isSelected = selectedMemberIds.includes(memberId);
@@ -48,9 +50,9 @@ export function TodoMemberSelect({
                   <AvatarFallback>{getInitials(member.user.name)}</AvatarFallback>
                 </Avatar>
               ))}
-              {selectedMemberIds.length > 3 && (
+              {hiddenCount > 0 && (
                 <span className="text-xs text-muted-foreground ml-1">
-                  +{selectedMemberIds.length - 3}
+                  +{hiddenCount}
                 </span>
               )}
             </AvatarGroup>

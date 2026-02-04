@@ -42,6 +42,7 @@ turbo dev          # Turborepo dev
 # for eg: you made changes to the agent
 cd packages/agent && bunx tsc --noEmit
 # do not run bunx tsc --noEmit in the base dir
+```
 ---
 
 ## Communication Style

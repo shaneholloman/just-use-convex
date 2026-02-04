@@ -1,5 +1,5 @@
 import alchemy from "alchemy";
-import { Worker, DurableObjectNamespace, Container, WranglerJson, VectorizeIndex } from "alchemy/cloudflare";
+import { Worker, DurableObjectNamespace, Container, WranglerJson, VectorizeIndex, Workflow } from "alchemy/cloudflare";
 
 const app = await alchemy("just-use-convex", {
   phase: process.argv.includes("--destroy") ? "destroy" : "up",
@@ -26,6 +26,11 @@ const chatMessagesIndex = await VectorizeIndex("chat-messages", {
   adopt: true,
 });
 
+const scheduledJobWorkflow = Workflow("scheduled-job-workflow", {
+  workflowName: "scheduled-job-workflow",
+  className: "ScheduledJobWorkflow",
+});
+
 export const worker = await Worker("agent-worker", {
   entrypoint: "./src/index.ts",
   url: false,
@@ -34,6 +39,7 @@ export const worker = await Worker("agent-worker", {
     agentWorker: agentWorkerNamespace,
     Sandbox: sandboxContainer,
     VECTORIZE_CHAT_MESSAGES: chatMessagesIndex,
+    SCHEDULED_JOB_WORKFLOW: scheduledJobWorkflow,
     SANDBOX_ROOT_DIR: '/workspace',
     NODE_ENV: "production",
     CONVEX_URL: alchemy.secret(process.env.CONVEX_URL),

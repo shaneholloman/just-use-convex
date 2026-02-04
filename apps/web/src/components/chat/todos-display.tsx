@@ -27,7 +27,7 @@ export const TodosDisplay = memo(function TodosDisplay({ todos, approval, state,
   if (todos.length === 0) return null;
 
   const activeCount = todos.filter((t) => t.status !== "done").length;
-  const showApproval = state && approval?.approved !== true;
+  const showApproval = !!state && !!approval;
 
   return (
     <Queue className="mb-2">

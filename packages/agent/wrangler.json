@@ -41,6 +41,14 @@
       ]
     }
   ],
+  "workflows": [
+    {
+      "name": "scheduled-job-workflow",
+      "binding": "SCHEDULED_JOB_WORKFLOW",
+      "class_name": "ScheduledJobWorkflow",
+      "script_name": "just-use-convex-agent-worker-barrel"
+    }
+  ],
   "containers": [
     {
       "class_name": "Sandbox",
