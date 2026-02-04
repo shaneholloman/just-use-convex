@@ -11,10 +11,9 @@ export const favoriteModelsAtom = atomWithStorage<string[]>(
 export type DefaultChatSettings = {
   model: string;
   reasoningEffort?: "low" | "medium" | "high";
-  yolo?: boolean;
 };
 
-// Persisted default chat settings (model, reasoning, yolo)
+// Persisted default chat settings (model, reasoning)
 export const defaultChatSettingsAtom = atomWithStorage<DefaultChatSettings>(
   "default-chat-settings",
   { model: "openai/gpt-5.2-chat" },

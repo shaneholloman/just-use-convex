@@ -25,7 +25,6 @@ import { parseStreamToUI } from "./utils/fullStreamParser";
 type ChatState = {
   model: string;
   reasoningEffort?: "low" | "medium" | "high";
-  yolo?: boolean;
   inputModalities?: string[];
 };
 
@@ -89,8 +88,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
   private sandboxBackend: SandboxFilesystemBackend | null = null;
-  private lastAppliedModel: string | null = null;
-  private lastAppliedReasoningEffort: "low" | "medium" | "high" | undefined = undefined;
   private backgroundTaskStore = new BackgroundTaskStore();
 
   private async saveFilesToSandbox(messages: UIMessage[]): Promise<void> {
@@ -159,20 +156,16 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const url = new URL(request.url);
     const model = url.searchParams.get('model');
     const reasoningEffort = url.searchParams.get('reasoningEffort') as "low" | "medium" | "high" | undefined;
-    const yolo = url.searchParams.get('yolo') === 'true';
-
     // Only update state if we have new values and state doesn't exist yet
     const state = this.state ?? {};
     if (
       (!state.model && model) ||
-      (!state.reasoningEffort && reasoningEffort) ||
-      (!state.yolo && yolo)
+      (!state.reasoningEffort && reasoningEffort)
     ) {
       this.setState({
         ...state,
         ...(model && { model }),
         ...(reasoningEffort && { reasoningEffort }),
-        ...(yolo && { yolo }),
       });
     }
 
@@ -279,10 +272,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       }),
     ]);
 
-    // Track the initial model settings
-    this.lastAppliedModel = this.state.model;
-    this.lastAppliedReasoningEffort = this.state.reasoningEffort;
-
     this.planAgent = agent;
     await this._patchAgent();
     return agent;
@@ -292,27 +281,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const agent = this.planAgent;
     if (!agent) return;
 
-    const writeTodos = agent.getTools().find(t => t.name === "write_todos");
-    if (writeTodos) {
-      // Add approval requirement when not in yolo mode
-      if (!this.state?.yolo) {
-        Object.defineProperty(writeTodos, 'needsApproval', {
-          value: async ({ todos }: { todos: Array<{ content: string; status: 'pending' | 'in_progress' | 'done'; id?: string }> }) => {
-            if (todos.every(t => t.status === "pending")) {
-              return true;
-            }
-            return false;
-          },
-          writable: true,
-          configurable: true,
-        });
-      }
-    }
-
     const tasks = agent.getTools().find(t => t.name === "task");
     if (tasks) {
       patchToolWithBackgroundSupport(tasks, this.backgroundTaskStore, {
-        maxDuration: 30000,
+        maxDuration: 30 * 60 * 1000, // 30 minutes
         allowAgentSetDuration: true,
         allowBackground: true,
       });
@@ -333,17 +305,11 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const model = this.state.model;
     const reasoningEffort = this.state.reasoningEffort;
 
-    // Only recreate model if settings actually changed
-    const modelChanged = model !== this.lastAppliedModel || reasoningEffort !== this.lastAppliedReasoningEffort;
-    if (model && modelChanged) {
-      Object.defineProperty(agent, 'model', {
-        value: createAiClient(model, reasoningEffort),
-        writable: true,
-        configurable: true,
-      });
-      this.lastAppliedModel = model;
-      this.lastAppliedReasoningEffort = reasoningEffort;
-    }
+    Object.defineProperty(agent, 'model', {
+      value: createAiClient(model, reasoningEffort),
+      writable: true,
+      configurable: true,
+    });
   }
 
   override async onRequest(request: Request): Promise<Response> {

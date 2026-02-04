@@ -6,9 +6,6 @@ import {
 } from "@voltagent/core";
 import { z } from "zod";
 
-/** Callback invoked when a background task completes */
-export type TaskCompletionCallback = (task: BackgroundTask) => void | Promise<void>;
-
 /** Status of a background task */
 export type BackgroundTaskStatus =
   | "pending"
@@ -66,8 +63,6 @@ export type RunInBackgroundOptions = {
   timeoutMs: number;
   /** If provided, task was converted from foreground (affects status) */
   initialLog?: string;
-  /** Callback invoked when task completes (success or failure) */
-  onComplete?: TaskCompletionCallback;
 };
 
 /** A tool or toolkit that can be passed to withBackgroundTaskTools */
@@ -75,7 +70,6 @@ export type ToolOrToolkit = BaseTool | Toolkit;
 
 export class BackgroundTaskStore {
   private tasks = new Map<string, BackgroundTask>();
-  private callbacks = new Map<string, TaskCompletionCallback[]>();
   private idCounter = 0;
 
   generateId(): string {
@@ -144,7 +138,6 @@ export class BackgroundTaskStore {
       task.abortController?.abort();
       task.status = "cancelled";
       task.completedAt = Date.now();
-      void this.notifyCompletion(id);
       return { cancelled: true, previousStatus };
     }
 
@@ -156,44 +149,8 @@ export class BackgroundTaskStore {
     for (const [id, task] of this.tasks) {
       if (task.completedAt && now - task.completedAt > maxAgeMs) {
         this.tasks.delete(id);
-        this.callbacks.delete(id);
       }
     }
-  }
-
-  onComplete(taskId: string, callback: TaskCompletionCallback): () => void {
-    const task = this.tasks.get(taskId);
-    if (task && TERMINAL_STATUSES.includes(task.status)) {
-      void Promise.resolve().then(() => callback(task));
-      return () => {};
-    }
-
-    const existing = this.callbacks.get(taskId) || [];
-    existing.push(callback);
-    this.callbacks.set(taskId, existing);
-
-    return () => {
-      const cbs = this.callbacks.get(taskId);
-      if (cbs) {
-        const idx = cbs.indexOf(callback);
-        if (idx >= 0) cbs.splice(idx, 1);
-      }
-    };
-  }
-
-  async notifyCompletion(taskId: string): Promise<void> {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
-
-    const callbacks = this.callbacks.get(taskId) || [];
-    for (const cb of callbacks) {
-      try {
-        await cb(task);
-      } catch (error) {
-        console.error(`Background task completion callback error for ${taskId}:`, error);
-      }
-    }
-    this.callbacks.delete(taskId);
   }
 }
 
@@ -259,7 +216,6 @@ export function runInBackground({
   executionFactory,
   timeoutMs,
   initialLog,
-  onComplete,
   toolCallId,
 }: RunInBackgroundOptions): BackgroundTaskResult {
   const task = store.create(toolName, toolArgs, toolCallId);
@@ -269,17 +225,12 @@ export function runInBackground({
     store.addLog(task.id, { type: "info", message: initialLog });
   }
 
-  if (onComplete) {
-    store.onComplete(task.id, onComplete);
-  }
-
   void (async () => {
-    const finalizeTask = async (updates: Partial<BackgroundTask>) => {
+    const finalizeTask = (updates: Partial<BackgroundTask>) => {
       store.update(task.id, {
         ...updates,
         completedAt: Date.now(),
       });
-      await store.notifyCompletion(task.id);
     };
 
     try {
@@ -299,11 +250,11 @@ export function runInBackground({
         }
       }
 
-      await finalizeTask({ status: "completed", result });
+      finalizeTask({ status: "completed", result });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       store.addLog(task.id, { type: "error", message: errorMessage });
-      await finalizeTask({
+      finalizeTask({
         status: error instanceof Error && error.name === "AbortError" ? "cancelled" : "failed",
         error: errorMessage,
       });

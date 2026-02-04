@@ -11,3 +11,8 @@ export function createAiClient(model: string, reasoningEffort?: "low" | "medium"
     reasoning: reasoningEffort ? { effort: reasoningEffort } : undefined,
   });
 }
+
+export const embeddingClient = {
+  model: openrouter.embeddingModel("openai/text-embedding-3-small"),
+  size: 1536,
+}

@@ -126,7 +126,6 @@ function AgentInstanceInner({
       // Pass defaults - backend will only use if state is empty
       model: defaultSettings.model,
       reasoningEffort: defaultSettings.reasoningEffort ?? null,
-      yolo: defaultSettings.yolo ? "true" : null,
     },
   });
 

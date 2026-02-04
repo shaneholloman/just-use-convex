@@ -8,7 +8,6 @@ import {
   type BackgroundTaskLogType,
   type BackgroundTaskStore,
   runInBackground,
-  type TaskCompletionCallback,
 } from "./toolWBackground";
 
 const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000; // 30 minutes
@@ -205,11 +204,6 @@ function createWrappedExecute(
         : maxAllowedDuration;
 
     if (allowBackground && background) {
-      const onComplete = (
-        opts?.systemContext?.get?.("onBackgroundTaskComplete") ||
-        opts?.context?.get?.("onBackgroundTaskComplete")
-      ) as TaskCompletionCallback | undefined;
-
       const toolCallId = resolveToolCallId(opts);
       const executionFactory = (backgroundSignal?: AbortSignal) => {
         const abortController = deriveAbortController(opts, backgroundSignal);
@@ -222,7 +216,6 @@ function createWrappedExecute(
         toolArgs,
         executionFactory,
         timeoutMs: effectiveTimeout,
-        onComplete,
         toolCallId,
       });
     }

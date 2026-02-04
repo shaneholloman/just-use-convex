@@ -1,4 +1,4 @@
-import { PaperclipIcon, Zap } from "lucide-react";
+import { PaperclipIcon } from "lucide-react";
 import type { OpenRouterModel } from "@/hooks/use-openrouter-models";
 import type { useAgentChat } from "@cloudflare/ai-chat/react";
 import { memo, useCallback } from "react";
@@ -8,7 +8,6 @@ import { defaultChatSettingsAtom } from "@/store/models";
 export type ChatSettings = {
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
-  yolo?: boolean;
   inputModalities?: string[];
 };
 import {
@@ -65,16 +64,6 @@ export const ChatInput = memo(function ChatInput({
     [setSettings, setDefaultSettings, hasMessages]
   );
 
-  const handleYoloToggle = useCallback(() => {
-    setSettings((prev) => {
-      const newYolo = !prev.yolo;
-      if (!hasMessages) {
-        setDefaultSettings((p) => ({ ...p, yolo: newYolo }));
-      }
-      return { ...prev, yolo: newYolo };
-    });
-  }, [setSettings, setDefaultSettings, hasMessages]);
-
   return (
     <div className="pb-1 mx-auto w-4xl">
       <PromptInput
@@ -99,7 +88,6 @@ export const ChatInput = memo(function ChatInput({
                 onSelect={handleReasoningChange}
               />
             )}
-            <YoloModeButton active={settings.yolo ?? false} onToggle={handleYoloToggle} />
           </PromptInputTools>
           <PromptInputSubmit status={status} onStop={onStop} />
         </PromptInputFooter>
@@ -114,18 +102,6 @@ function AttachmentButton() {
   return (
     <PromptInputButton onClick={() => attachments.openFileDialog()} size="icon-xs">
       <PaperclipIcon className="size-4" />
-    </PromptInputButton>
-  );
-}
-
-function YoloModeButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <PromptInputButton
-      onClick={onToggle}
-      className={active ? "bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 hover:text-amber-500" : ""}
-    >
-      <Zap className="size-4" />
-      {active && <span className="text-xs font-medium">YOLO</span>}
     </PromptInputButton>
   );
 }
