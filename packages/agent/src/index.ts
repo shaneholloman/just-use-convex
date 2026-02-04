@@ -124,7 +124,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
               const binaryContent = atob(base64Match[1]);
               const filePath = `${uploadDir}/${filename}`;
               await this.sandboxBackend.write(filePath, binaryContent);
-              console.log(`Saved file to sandbox: ${filePath}`);
             }
           }
           // Handle blob URLs or external URLs - skip for now as they require fetch
@@ -289,7 +288,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       if (chat.sandbox) {
         this.sandboxId = chat.sandbox._id;
       }
-
     }
   }
 
@@ -307,6 +305,14 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     const filesystemBackend = this.sandboxId ? new SandboxFilesystemBackend(this.env, this.sandboxId) : undefined;
     this.sandboxBackend = filesystemBackend ?? null;
+    if (filesystemBackend) {
+      console.log("[sandbox] backend ready", {
+        sandboxId: this.sandboxId,
+        rootDir: filesystemBackend.rootDir,
+      });
+    } else {
+      console.log("[sandbox] backend disabled (no sandboxId)");
+    }
 
     const agent = new PlanAgent({
       name: "Assistant",
@@ -444,12 +450,14 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     // Delete messages that are no longer in the list
     const existingMessages = this.messages;
     const deletedMessageIds: string[] = [];
-    for (const msg of existingMessages) {
-      if (!keepIds.has(msg.id)) {
-        this.sql`DELETE FROM cf_ai_chat_agent_messages WHERE id = ${msg.id}`;
-        deletedMessageIds.push(msg.id);
-      }
-    }
+    await Promise.all(
+      existingMessages.map(async (msg) => {
+        if (!keepIds.has(msg.id)) {
+          await this.sql`DELETE FROM cf_ai_chat_agent_messages WHERE id = ${msg.id}`;
+          deletedMessageIds.push(msg.id);
+        }
+      })
+    );
 
     if (deletedMessageIds.length > 0) {
       this.deleteMessageVectors(deletedMessageIds).catch((error) => {
@@ -502,17 +510,21 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         this.state.inputModalities
       );
 
-      const lastUserIndex = [...filteredMessages].reverse().findIndex((msg) => msg.role === "user");
-      const lastUserMessage =
-        lastUserIndex === -1 ? null : filteredMessages[filteredMessages.length - 1 - lastUserIndex];
+      let lastUserMessage: { index: number; message: UIMessage } | null = null;
+      for (const [index, message] of filteredMessages.reverse().entries()) {
+        if (message.role === "user") {
+          lastUserMessage = { index, message };
+          break;
+        }
+      }
       const retrievalMessage = lastUserMessage
-        ? await this.buildRetrievalMessage(extractMessageText(lastUserMessage))
+        ? await this.buildRetrievalMessage(extractMessageText(lastUserMessage.message))
         : null;
       const modelMessages = retrievalMessage
         ? [
-            ...filteredMessages.slice(0, filteredMessages.length - 1 - lastUserIndex),
+            ...filteredMessages.slice(0, filteredMessages.length - 1 - (lastUserMessage?.index ?? 0)),
             retrievalMessage,
-            ...filteredMessages.slice(filteredMessages.length - 1 - lastUserIndex),
+            ...filteredMessages.slice(filteredMessages.length - 1 - (lastUserMessage?.index ?? 0)),
           ]
         : filteredMessages;
 

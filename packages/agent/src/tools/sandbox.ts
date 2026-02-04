@@ -88,8 +88,7 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
       }
 
       return files;
-    } catch (error) {
-      console.error("lsInfo error:", error);
+    } catch {
       return [];
     }
   }
