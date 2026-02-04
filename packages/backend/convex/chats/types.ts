@@ -10,7 +10,7 @@ export const ChatWithSystemFields = z.object(chatsWithSystemFields);
 
 // Filter schema
 const ChatFilters = z.object({
-  userId: z.string(),
+  memberId: z.string(),
   title: z.string(),
 }).partial().extend({
   isPinned: z.boolean().default(false),

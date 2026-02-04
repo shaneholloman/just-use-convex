@@ -1,9 +1,9 @@
 import { routeAgentRequest, type Connection, type ConnectionContext, callable } from "agents";
 export { Sandbox } from "@cloudflare/sandbox";
-import { AIChatAgent, type OnChatMessageOptions } from "agents/ai-chat-agent";
+import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output, type UIMessage, isFileUIPart, createUIMessageStreamResponse, createUIMessageStream } from "ai";
 import { PlanAgent, setWaitUntil, AgentRegistry, createVoltOpsClient, createVoltAgentObservability, createPlanningToolkit } from "@voltagent/core";
-import { createAiClient } from "./client";
+import { createAiClient, embedTexts } from "./client";
 import { SYSTEM_PROMPT, TASK_PROMPT } from "./prompt";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "./tools/sandbox";
 import { createWebSearchToolkit } from "./tools/websearch";
@@ -20,6 +20,15 @@ import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { z } from "zod";
 import { parseStreamToUI } from "./utils/fullStreamParser";
+import type { FunctionReturnType } from "convex/server";
+
+function extractMessageText(message: UIMessage): string {
+  if (message.role !== "user" && message.role !== "assistant") return "";
+  return message.parts
+    .map((part) => part.type === "text" ? part.text : "")
+    .filter(Boolean)
+    .join("\n");
+}
 
 // State type for chat settings synced from frontend
 type ChatState = {
@@ -89,6 +98,11 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   private sandboxId: string | null = null;
   private sandboxBackend: SandboxFilesystemBackend | null = null;
   private backgroundTaskStore = new BackgroundTaskStore();
+  private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
+
+  private buildVectorId(messageId: string): string {
+    return `${this.name}:${messageId}`;
+  }
 
   private async saveFilesToSandbox(messages: UIMessage[]): Promise<void> {
     if (!this.sandboxBackend) return;
@@ -122,6 +136,89 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     }
   }
 
+  private async indexMessages(messages: UIMessage[]): Promise<void> {
+    const vectorize = this.env.VECTORIZE_CHAT_MESSAGES;
+    if (!vectorize) return;
+
+    const texts: string[] = [];
+    const metadata: Array<{ role: string; chatId: string; messageId: string; text: string }> = [];
+
+    for (const message of messages) {
+      if (message.role !== "user" && message.role !== "assistant") continue;
+      const text = extractMessageText(message);
+      if (!text) continue;
+      texts.push(text);
+      metadata.push({
+        role: message.role,
+        chatId: this.chatDoc?._id as Id<"chats">,
+        messageId: message.id,
+        text,
+      });
+    }
+
+    if (texts.length === 0) return;
+
+    const embeddings = await embedTexts(texts);
+    const vectors = [];
+    for (let index = 0; index < embeddings.length; index += 1) {
+      const values = embeddings[index];
+      const meta = metadata[index];
+      if (!values || !meta) continue;
+      vectors.push({
+        id: this.buildVectorId(meta.messageId),
+        values,
+        metadata: meta,
+      });
+    }
+
+    if (vectors.length > 0) {
+      await vectorize.upsert(vectors);
+    }
+  }
+
+  private async deleteMessageVectors(messageIds: string[]): Promise<void> {
+    const vectorize = this.env.VECTORIZE_CHAT_MESSAGES;
+    if (!vectorize || messageIds.length === 0) return;
+
+    const ids = messageIds.map((messageId) => this.buildVectorId(messageId));
+    await vectorize.deleteByIds(ids);
+  }
+
+  private async buildRetrievalMessage(
+    queryText: string
+  ): Promise<UIMessage | null> {
+    const vectorize = this.env.VECTORIZE_CHAT_MESSAGES;
+    if (!vectorize) return null;
+
+    const [embedding] = await embedTexts([queryText]);
+    if (!embedding) return null;
+    const results = await vectorize.query(embedding, {
+      topK: 6,
+      namespace: this.chatDoc?.memberId,
+      returnMetadata: "all"
+    });
+
+    if (!results.matches.length) return null;
+
+    const contextLines = results.matches.map((match, index) => {
+      const role = typeof match.metadata?.role === "string" ? match.metadata.role : "unknown";
+      const text = typeof match.metadata?.text === "string" ? match.metadata.text : "";
+      const score = Number.isFinite(match.score) ? match.score.toFixed(4) : "n/a";
+      return `#${index + 1} (${role}, score ${score})\\n${text}`;
+    });
+
+    return {
+      id: `vectorize-${crypto.randomUUID()}`,
+      role: "system",
+      parts: [
+        {
+          type: "text",
+          text: `Relevant past messages:\n\n${contextLines.join("\n\n")}`,
+        },
+      ],
+    };
+  }
+
   private async generateTitle(userMessage: string): Promise<void> {
     if (!this.convexAdapter) return;
 
@@ -143,7 +240,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
           ? api.chats.index.updateExt
           : api.chats.index.update;
         await this.convexAdapter.mutation(updateFn, {
-          _id: this.name as Id<"chats">,
+        _id: this.chatDoc?._id,
           patch: { title },
         });
       }
@@ -187,10 +284,12 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       if (!chat) {
         throw new Error("Unauthorized: No chat found");
       }
+      this.chatDoc = chat;
       // Derive sandboxId from chat data
       if (chat.sandbox) {
         this.sandboxId = chat.sandbox._id;
       }
+
     }
   }
 
@@ -328,6 +427,15 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     await super.onStateUpdate(state, source);
   }
 
+  override async persistMessages(messages: UIMessage[]): Promise<void> {
+    await super.persistMessages(messages);
+    try {
+      await this.indexMessages(messages);
+    } catch (error) {
+      console.error("Failed to index messages in Vectorize:", error);
+    }
+  }
+
   @callable()
   async updateMessages(messages: Parameters<typeof this.persistMessages>[0]) {
     // Get the IDs of messages to keep
@@ -335,10 +443,18 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     
     // Delete messages that are no longer in the list
     const existingMessages = this.messages;
+    const deletedMessageIds: string[] = [];
     for (const msg of existingMessages) {
       if (!keepIds.has(msg.id)) {
         this.sql`DELETE FROM cf_ai_chat_agent_messages WHERE id = ${msg.id}`;
+        deletedMessageIds.push(msg.id);
       }
+    }
+
+    if (deletedMessageIds.length > 0) {
+      this.deleteMessageVectors(deletedMessageIds).catch((error) => {
+        console.error("Failed to delete vectorized messages:", error);
+      });
     }
     
     // Persist the new message set
@@ -360,7 +476,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
           ? api.chats.index.updateExt
           : api.chats.index.update;
         this.convexAdapter.mutation(updateFn, {
-          _id: this.name as Id<"chats">,
+          _id: this.chatDoc?._id,
           patch: {},
         });
       }
@@ -386,8 +502,22 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         this.state.inputModalities
       );
 
+      const lastUserIndex = [...filteredMessages].reverse().findIndex((msg) => msg.role === "user");
+      const lastUserMessage =
+        lastUserIndex === -1 ? null : filteredMessages[filteredMessages.length - 1 - lastUserIndex];
+      const retrievalMessage = lastUserMessage
+        ? await this.buildRetrievalMessage(extractMessageText(lastUserMessage))
+        : null;
+      const modelMessages = retrievalMessage
+        ? [
+            ...filteredMessages.slice(0, filteredMessages.length - 1 - lastUserIndex),
+            retrievalMessage,
+            ...filteredMessages.slice(filteredMessages.length - 1 - lastUserIndex),
+          ]
+        : filteredMessages;
+
       const agent = this.planAgent || (await this._prepAgent());
-      const stream = await agent?.streamText(filteredMessages, {
+      const stream = await agent?.streamText(modelMessages, {
         abortSignal: options?.abortSignal
       })
 

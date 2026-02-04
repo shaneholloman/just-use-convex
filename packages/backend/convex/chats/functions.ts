@@ -3,9 +3,9 @@ import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
 
 async function runChatsQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
-  return ctx.table("chats", "organizationId_userId_isPinned", (q) => q
+  return ctx.table("chats", "organizationId_memberId_isPinned", (q) => q
     .eq("organizationId", ctx.identity.activeOrganizationId)
-    .eq("userId", ctx.identity.userId)
+    .eq("memberId", ctx.identity.memberId)
     .eq("isPinned", args.filters.isPinned)
   )
     .order("desc")
@@ -62,7 +62,7 @@ export async function GetChat(ctx: zQueryCtx, args: z.infer<typeof types.GetChat
   if (chat.organizationId !== ctx.identity.activeOrganizationId) {
     throw new Error("You are not authorized to view this chat");
   }
-  if (chat.userId !== ctx.identity.userId) {
+  if (chat.memberId !== ctx.identity.memberId) {
     throw new Error("You are not authorized to view this chat");
   }
   const sandbox = await chat.edge("sandbox");
@@ -87,7 +87,7 @@ export async function CreateChat(ctx: zMutationCtx, args: z.infer<typeof types.C
     title: args.data.title,
     sandboxId: args.data.sandboxId,
     organizationId: ctx.identity.activeOrganizationId,
-    userId: ctx.identity.userId,
+    memberId: ctx.identity.memberId,
     isPinned: false,
     updatedAt: now,
   });
@@ -99,7 +99,7 @@ export async function UpdateChat(ctx: zMutationCtx, args: z.infer<typeof types.U
   if (chat.organizationId !== ctx.identity.activeOrganizationId) {
     throw new Error("You are not authorized to update this chat");
   }
-  if (chat.userId !== ctx.identity.userId) {
+  if (chat.memberId !== ctx.identity.memberId) {
     throw new Error("You are not authorized to update this chat");
   }
 
@@ -120,7 +120,7 @@ export async function DeleteChat(ctx: zMutationCtx, args: z.infer<typeof types.D
   if (chat.organizationId !== ctx.identity.activeOrganizationId) {
     throw new Error("You are not authorized to delete this chat");
   }
-  if (chat.userId !== ctx.identity.userId) {
+  if (chat.memberId !== ctx.identity.memberId) {
     throw new Error("You are not authorized to delete this chat");
   }
   await chat.delete();
@@ -132,7 +132,7 @@ export async function SearchChats(ctx: zQueryCtx, args: z.infer<typeof types.Sea
     .search("title", (q) =>
       q.search("title", args.query)
         .eq("organizationId", ctx.identity.activeOrganizationId)
-        .eq("userId", ctx.identity.userId)
+        .eq("memberId", ctx.identity.memberId)
         .eq("isPinned", args.isPinned)
     )
     .paginate(args.paginationOpts);

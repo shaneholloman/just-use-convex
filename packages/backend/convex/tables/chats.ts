@@ -6,7 +6,7 @@ import { sandboxesWithSystemFields } from "./sandboxes";
 
 export const chatsZodSchema = {
   organizationId: z.string(),
-  userId: z.string(),
+  memberId: z.string(),
   title: z.string(),
   isPinned: z.boolean(),
   updatedAt: z.number(),
@@ -28,12 +28,12 @@ export const chatsWithSystemFields = {
 };
 
 const chatsTable = Chats.table
-  .index("organizationId_userId_isPinned", ["organizationId", "userId", "isPinned", "updatedAt"])
+  .index("organizationId_memberId_isPinned", ["organizationId", "memberId", "isPinned", "updatedAt"])
   .index("organizationId", ["organizationId", "updatedAt"])
-  .index("userId", ["userId"])
+  .index("memberId", ["memberId"])
   .searchIndex("title", {
     searchField: "title",
-    filterFields: ["organizationId", "userId", "isPinned"],
+    filterFields: ["organizationId", "memberId", "isPinned"],
   });
 
 // Many chats belong to one sandbox (optional relationship)

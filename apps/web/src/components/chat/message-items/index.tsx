@@ -25,12 +25,13 @@ import { RegenerateButton } from "./regenerate-button";
 import { EditMessageButton } from "./edit-message-button";
 import { ChainOfThoughtPart, isChainOfThoughtPart } from "./chain-of-thought-part";
 import { ToolPart, getToolName, isToolPart, type ToolPartType } from "./tool-part";
-import type { TodosState } from "../message-list";
+import type { AskUserState, TodosState } from "../message-list";
 import {
   useMessageEditing,
   extractMessageText,
   extractMessageFiles,
   extractTodosFromMessage,
+  extractAskUserFromMessage,
 } from "@/hooks/use-chat";
 import { extractSourcesFromMessage } from "@/lib/citations";
 
@@ -43,12 +44,13 @@ export interface MessageItemProps {
   isLastAssistantMessage?: boolean;
   userMessageId?: string;
   onTodosChange?: (todosState: TodosState) => void;
+  onAskUserChange?: (askUserState: AskUserState | null) => void;
 }
 
 // Tools completely hidden from message (rendered elsewhere or extracted)
-const HIDDEN_TOOLS = ["write_todos"];
+const HIDDEN_TOOLS = ["write_todos", "ask_user"];
 // Tools rendered outside chain of thought but still shown inline
-const INLINE_TOOLS = ["ask_user"];
+const INLINE_TOOLS: string[] = [];
 
 function isHiddenTool(part: UIMessage["parts"][number]): boolean {
   return HIDDEN_TOOLS.includes(getToolName(part.type));
@@ -67,6 +69,7 @@ export const MessageItem = memo(function MessageItem({
   isLastAssistantMessage,
   userMessageId,
   onTodosChange,
+  onAskUserChange,
 }: MessageItemProps) {
   const messageText = extractMessageText(message);
   const messageFiles = extractMessageFiles(message);
@@ -159,6 +162,13 @@ export const MessageItem = memo(function MessageItem({
       }
     }
   }, [message, isLastAssistantMessage, onTodosChange]);
+
+  useEffect(() => {
+    if (isLastAssistantMessage && onAskUserChange) {
+      const askUserState = extractAskUserFromMessage(message, true);
+      onAskUserChange(askUserState);
+    }
+  }, [message, isLastAssistantMessage, onAskUserChange]);
 
   const handleRegenerate = () => {
     if (onRegenerate) {

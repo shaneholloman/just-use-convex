@@ -16,13 +16,13 @@ app.use(aggregate, { name: "todosByOrg" });
 app.use(aggregate, { name: "todosByTeam" });
 app.use(aggregate, { name: "todosByTeamStatus" });
 
-// User-level aggregates
+// Member-level aggregates
 app.use(aggregate, { name: "todosByCreator" });
 app.use(aggregate, { name: "todosByCreatorStatus" });
 
 // Chat aggregates
 app.use(aggregate, { name: "chatsByOrg" });
-app.use(aggregate, { name: "chatsByUser" });
+app.use(aggregate, { name: "chatsByMember" });
 
 // Sandbox aggregates
 app.use(aggregate, { name: "sandboxesByOrg" });

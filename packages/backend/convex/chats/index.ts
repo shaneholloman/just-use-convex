@@ -61,10 +61,10 @@ export const search = zQuery({
 // STATS QUERIES
 // ═══════════════════════════════════════════════════════════════════
 
-export const getUserStats = zQuery({
+export const getMemberStats = zQuery({
   args: {},
-  handler: async (ctx): Promise<ReturnType<typeof stats.GetUserChatStats>> => {
-    return await stats.GetUserChatStats(ctx);
+  handler: async (ctx): Promise<ReturnType<typeof stats.GetMemberChatStats>> => {
+    return await stats.GetMemberChatStats(ctx);
   },
 });
 

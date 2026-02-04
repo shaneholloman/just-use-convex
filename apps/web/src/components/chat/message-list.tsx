@@ -8,8 +8,10 @@ import type { FileUIPart } from "ai";
 import { MessageItem } from "./message-items";
 import type { QueueTodo } from "@/components/ai-elements/queue";
 import type { ConfirmationProps } from "@/components/ai-elements/confirmation";
+import type { AskUserInput } from "@/components/ai-elements/ask-user";
 import {
   useTodosState,
+  useAskUserState,
   findLastAssistantMessageIndex,
   findPrecedingUserMessageId,
 } from "@/hooks/use-chat";
@@ -22,6 +24,11 @@ export type TodosState = {
   todosInput?: { todos?: QueueTodo[] };
 };
 
+export type AskUserState = {
+  input: AskUserInput;
+  approval?: ConfirmationProps["approval"];
+  state?: ConfirmationProps["state"];
+};
 
 interface MessageListProps {
   messages: UIMessage[];
@@ -30,6 +37,7 @@ interface MessageListProps {
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
   onTodosChange?: (todosState: TodosState) => void;
+  onAskUserChange?: (askUserState: AskUserState | null) => void;
 }
 
 export function MessageList({
@@ -39,10 +47,12 @@ export function MessageList({
   onRegenerate,
   onEditMessage,
   onTodosChange,
+  onAskUserChange,
 }: MessageListProps) {
   const { scrollToBottom } = useStickToBottomContext();
   const prevMessagesLength = useRef(messages.length);
   const { handleTodosChange, syncTodosToParent } = useTodosState();
+  const { handleAskUserChange, syncAskUserToParent } = useAskUserState();
 
   const lastAssistantMessageIndex = findLastAssistantMessageIndex(messages);
 
@@ -55,6 +65,10 @@ export function MessageList({
 
   useEffect(() => {
     syncTodosToParent(onTodosChange);
+  });
+
+  useEffect(() => {
+    syncAskUserToParent(onAskUserChange);
   });
 
   return (
@@ -76,6 +90,7 @@ export function MessageList({
             isLastAssistantMessage={index === lastAssistantMessageIndex}
             userMessageId={userMessageId}
             onTodosChange={index === lastAssistantMessageIndex ? handleTodosChange : undefined}
+            onAskUserChange={index === lastAssistantMessageIndex ? handleAskUserChange : undefined}
           />
         );
       })}

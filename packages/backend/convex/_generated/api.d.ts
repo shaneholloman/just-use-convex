@@ -3446,7 +3446,7 @@ export declare const components: {
       >;
     };
   };
-  chatsByUser: {
+  chatsByMember: {
     btree: {
       aggregateBetween: FunctionReference<
         "query",

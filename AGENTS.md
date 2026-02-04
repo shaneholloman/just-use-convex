@@ -145,6 +145,8 @@ File-based TanStack Router:
 
 ## Code Patterns
 
+- always run the typecheck at the end and iterate over it until finished
+- do not shy away from refactoring bad patterns, be proactive
 - avoid defining new types, infer and reuse exsisting types form other files / by importing them from the relevant package
 - always use convex ents for convex related stuff
 - whenever implementing something for convex, analyze adjecent and relevant files for similar pattern implementation

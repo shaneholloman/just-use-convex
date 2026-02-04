@@ -2,8 +2,9 @@ import { useCallback, useState, useRef, useEffect } from "react";
 import type { UIMessage } from "@ai-sdk/react";
 import type { ChatAddToolApproveResponseFunction, FileUIPart } from "ai";
 import type { useAgentChat } from "@cloudflare/ai-chat/react";
-import type { TodosState } from "@/components/chat/message-list";
+import type { AskUserState, TodosState } from "@/components/chat/message-list";
 import type { QueueTodo } from "@/components/ai-elements/queue";
+import type { AskUserInput } from "@/components/ai-elements/ask-user";
 import { isToolPart } from "@/components/chat/message-items/tool-part";
 
 type AgentChatInstance = ReturnType<typeof useAgentChat>;
@@ -61,6 +62,29 @@ export function extractTodosFromMessage(
         todosState: part.state,
         todosToolCallId: part.toolCallId,
         todosInput: { todos },
+      };
+    }
+  }
+
+  return null;
+}
+
+export function extractAskUserFromMessage(
+  message: UIMessage,
+  isLastAssistantMessage: boolean
+): AskUserState | null {
+  if (!isLastAssistantMessage || message.role !== "assistant") {
+    return null;
+  }
+
+  for (const part of message.parts) {
+    if (isToolPart(part) && part.type === "tool-ask_user") {
+      const input = part.input as AskUserInput | undefined;
+      if (!input?.questions) return null;
+      return {
+        input,
+        approval: "approval" in part ? part.approval : undefined,
+        state: part.state,
       };
     }
   }
@@ -346,6 +370,32 @@ export function useTodosState() {
     todosStateRef,
     handleTodosChange,
     syncTodosToParent,
+  };
+}
+
+export function useAskUserState() {
+  const askUserStateRef = useRef<AskUserState | null>(null);
+  const prevAskUserJsonRef = useRef<string>("");
+
+  const handleAskUserChange = useCallback((askUserState: AskUserState | null) => {
+    askUserStateRef.current = askUserState;
+  }, []);
+
+  const syncAskUserToParent = useCallback(
+    (onAskUserChange?: (askUserState: AskUserState | null) => void) => {
+      const json = JSON.stringify(askUserStateRef.current);
+      if (json !== prevAskUserJsonRef.current) {
+        prevAskUserJsonRef.current = json;
+        onAskUserChange?.(askUserStateRef.current);
+      }
+    },
+    []
+  );
+
+  return {
+    askUserStateRef,
+    handleAskUserChange,
+    syncAskUserToParent,
   };
 }
 

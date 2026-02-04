@@ -10,10 +10,11 @@ import {
   ConversationEmptyState,
 } from "@/components/ai-elements/conversation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MessageList, type TodosState } from "@/components/chat/message-list";
+import { MessageList, type AskUserState, type TodosState } from "@/components/chat/message-list";
 import { useAgentInstance } from "@/providers/agent";
 import { TodosDisplay } from "@/components/chat/todos-display";
 import { useChat } from "@/hooks/use-chat";
+import { AskUserDisplay } from "@/components/chat/ask-user-display";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -41,6 +42,7 @@ function ChatPage() {
   );
 
   const [todosState, setTodosState] = useState<TodosState>({ todos: [] });
+  const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
 
   const {
     status,
@@ -82,6 +84,7 @@ function ChatPage() {
               onRegenerate={handleRegenerate}
               onEditMessage={handleEditMessage}
               onTodosChange={setTodosState}
+              onAskUserChange={setAskUserState}
             />
           )}
           {error && (
@@ -94,12 +97,21 @@ function ChatPage() {
       </Conversation>
 
       <div className="mx-auto w-4xl">
-        <TodosDisplay
-          todos={todosState.todos}
-          approval={todosState.todosApproval}
-          state={todosState.todosState}
-          toolApprovalResponse={handleToolApprovalResponse}
-        />
+        {askUserState?.state === "approval-requested" ? (
+          <AskUserDisplay
+            input={askUserState.input}
+            approval={askUserState.approval}
+            state={askUserState.state}
+            toolApprovalResponse={handleToolApprovalResponse}
+          />
+        ) : (
+          <TodosDisplay
+            todos={todosState.todos}
+            approval={todosState.todosApproval}
+            state={todosState.todosState}
+            toolApprovalResponse={handleToolApprovalResponse}
+          />
+        )}
       </div>
       <ChatInput
         onSubmit={handleSubmit}
