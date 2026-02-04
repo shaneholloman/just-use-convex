@@ -1,14 +1,15 @@
 import { routeAgentRequest, type Connection, type ConnectionContext, callable } from "agents";
 export { Sandbox } from "@cloudflare/sandbox";
 import { AIChatAgent, type OnChatMessageOptions } from "agents/ai-chat-agent";
-import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output, type UIMessage, isFileUIPart } from "ai";
-import type { PlanAgent } from "@voltagent/core";
+import { generateText, type StreamTextOnFinishCallback, type ToolSet, Output, type UIMessage, isFileUIPart, createUIMessageStreamResponse, createUIMessageStream } from "ai";
+import { PlanAgent, setWaitUntil, AgentRegistry, createVoltOpsClient, createVoltAgentObservability, createPlanningToolkit } from "@voltagent/core";
 import { createAiClient } from "./client";
 import { SYSTEM_PROMPT, TASK_PROMPT } from "./prompt";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "./tools/sandbox";
 import { createWebSearchToolkit } from "./tools/websearch";
 import { createAskUserToolkit } from "./tools/ask-user";
-import { BackgroundTaskStore, withBackgroundTaskTools, patchToolWithBackgroundSupport } from "./tools/utils";
+import { BackgroundTaskStore, withBackgroundTaskTools } from "./utils/toolWBackground";
+import { patchToolWithBackgroundSupport } from "./utils/toolWTimeout";
 import type { worker } from "../alchemy.run";
 import {
   createConvexAdapter,
@@ -18,6 +19,7 @@ import {
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { z } from "zod";
+import { parseStreamToUI } from "./utils/fullStreamParser";
 
 // State type for chat settings synced from frontend
 type ChatState = {
@@ -200,7 +202,16 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   private async _prepAgent(): Promise<PlanAgent> {
-    const { PlanAgent, createVoltAgentObservability } = await import("@voltagent/core");
+    setWaitUntil(this.ctx.waitUntil.bind(this.ctx));
+    const registry = AgentRegistry.getInstance();
+    if (this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY) {
+      registry.setGlobalVoltOpsClient(
+        createVoltOpsClient({
+          publicKey: this.env.VOLTAGENT_PUBLIC_KEY as string,
+          secretKey: this.env.VOLTAGENT_SECRET_KEY as string,
+        })
+      );
+    }
 
     const filesystemBackend = this.sandboxId ? new SandboxFilesystemBackend(this.env, this.sandboxId) : undefined;
     this.sandboxBackend = filesystemBackend ?? null;
@@ -214,38 +225,33 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         createWebSearchToolkit(),
         createAskUserToolkit(),
       ], this.backgroundTaskStore),
+      planning: false,
       toolResultEviction: {
         enabled: true,
         tokenLimit: 20000,
       },
       task: {
         taskDescription: TASK_PROMPT,
+        supervisorConfig: {
+          fullStreamEventForwarding: {
+            types: [
+              'tool-input-start',
+              'tool-input-delta',
+              'tool-input-end',
+              'tool-call',
+              'tool-result',
+              'tool-error',
+              'text-delta',
+              'reasoning-delta',
+              'source',
+              'error',
+              'finish',
+            ],
+          },
+        },
       },
       filesystem: false,
       maxSteps: 100,
-      hooks: {
-        // Remove forced tool choice - make planning optional
-        onPrepareMessages: async (args) => {
-          for (const key of args.context.systemContext.keys()) {
-            if (typeof key === "symbol" && key.description === "forcedToolChoice") {
-              args.context.systemContext.delete(key);
-              break;
-            }
-          }
-          return { messages: args.messages };
-        },
-        // Bypass "Planning required" error by marking plan as written
-        onToolStart: async (args) => {
-          if (args.tool.name !== "write_todos") {
-            for (const key of args.context.systemContext.keys()) {
-              if (typeof key === "symbol" && key.description === "planagentPlanWritten") {
-                args.context.systemContext.set(key, true);
-                break;
-              }
-            }
-          }
-        },
-      },
       ...(this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY ? {
         observability: createVoltAgentObservability({
           serviceName: "just-use-convex-agent",
@@ -262,6 +268,16 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         }),
       } : {}),
     });
+
+    agent.addTools([
+      createPlanningToolkit(agent, {
+        systemPrompt: [
+          'Use write_todos when a task is multi-step or when a plan improves clarity.',
+          'If the request is simple and direct, you may skip write_todos.',
+          'When you do use write_todos, keep 3-8 concise steps and exactly one in_progress.',
+        ].join('\n'),
+      }),
+    ]);
 
     // Track the initial model settings
     this.lastAppliedModel = this.state.model;
@@ -296,9 +312,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const tasks = agent.getTools().find(t => t.name === "task");
     if (tasks) {
       patchToolWithBackgroundSupport(tasks, this.backgroundTaskStore, {
-        duration: 30000,
+        maxDuration: 30000,
         allowAgentSetDuration: true,
-        maxAllowedAgentDuration: 1800000, // 30 minutes
         allowBackground: true,
       });
     }
@@ -410,7 +425,11 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         abortSignal: options?.abortSignal
       })
 
-      return stream.toUIMessageStreamResponse();
+      return createUIMessageStreamResponse({
+        stream: createUIMessageStream({
+          execute: ({ writer }) => parseStreamToUI(stream.fullStream, writer),
+        }),
+      });
     } catch (error) {
       console.error("Error in onChatMessage:", error);
       return new Response("Internal Server Error: " + JSON.stringify(error, null, 2), { status: 500 });

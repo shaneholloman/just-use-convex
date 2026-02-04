@@ -3,15 +3,8 @@ import {
   createToolkit,
   type BaseTool,
   type Toolkit,
-  type ToolExecuteOptions,
 } from "@voltagent/core";
-import { z, type ZodObject, type ZodRawShape } from "zod";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-// --- Background Task Types ---
+import { z } from "zod";
 
 /** Callback invoked when a background task completes */
 export type TaskCompletionCallback = (task: BackgroundTask) => void | Promise<void>;
@@ -23,6 +16,12 @@ export type BackgroundTaskStatus =
   | "completed"
   | "failed"
   | "cancelled";
+
+export const TERMINAL_STATUSES: readonly BackgroundTaskStatus[] = [
+  "completed",
+  "failed",
+  "cancelled",
+];
 
 /** Type of log entry in a background task */
 export type BackgroundTaskLogType = "stdout" | "stderr" | "info" | "error";
@@ -37,6 +36,7 @@ export type BackgroundTaskLog = {
 /** Internal representation of a background task */
 export type BackgroundTask = {
   id: string;
+  toolCallId: string;
   toolName: string;
   args: Record<string, unknown>;
   status: BackgroundTaskStatus;
@@ -54,12 +54,15 @@ export type BackgroundTaskResult = {
   status: "started" | "converted_to_background";
 };
 
+type ExecutionFactory = (abortSignal?: AbortSignal) => Promise<unknown> | unknown;
+
 /** Options for runInBackground helper */
 export type RunInBackgroundOptions = {
   store: BackgroundTaskStore;
+  toolCallId: string;
   toolName: string;
   toolArgs: Record<string, unknown>;
-  executionPromise: Promise<unknown> | unknown;
+  executionFactory: ExecutionFactory;
   timeoutMs: number;
   /** If provided, task was converted from foreground (affects status) */
   initialLog?: string;
@@ -67,49 +70,8 @@ export type RunInBackgroundOptions = {
   onComplete?: TaskCompletionCallback;
 };
 
-// --- Tool Configuration Types ---
-
-/** Configuration for wrapped tool timeout and background behavior */
-export type ToolCallConfig = {
-  /** Default timeout in ms (default: 60000ms) */
-  duration?: number;
-  /** Allow agent to set custom timeout (default: false) */
-  allowAgentSetDuration?: boolean;
-  /** Max timeout agent can set in ms (default: 1800000ms = 30m) */
-  maxAllowedAgentDuration?: number;
-  /** Allow agent to run tool in background via background param (default: false) */
-  allowBackground?: boolean;
-};
-
-/** Extended execute options passed to wrapped tool handlers */
-export type WrappedExecuteOptions = ToolExecuteOptions & {
-  timeout?: number;
-  log?: (entry: { type: BackgroundTaskLogType; message: string }) => void;
-};
-
-/** Options for createWrappedTool */
-export type WrappedToolOptions = Omit<
-  Parameters<typeof createTool>[0],
-  "execute" | "parameters"
-> & {
-  parameters: ZodObject<ZodRawShape>;
-  toolCallConfig?: ToolCallConfig;
-  store: BackgroundTaskStore;
-  execute?: (
-    args: Record<string, unknown>,
-    options?: WrappedExecuteOptions
-  ) => unknown | Promise<unknown>;
-};
-
-// --- Utility Types ---
-
 /** A tool or toolkit that can be passed to withBackgroundTaskTools */
 export type ToolOrToolkit = BaseTool | Toolkit;
-
-
-// ============================================================================
-// BackgroundTaskStore
-// ============================================================================
 
 export class BackgroundTaskStore {
   private tasks = new Map<string, BackgroundTask>();
@@ -120,9 +82,10 @@ export class BackgroundTaskStore {
     return `bg_${Date.now()}_${++this.idCounter}`;
   }
 
-  create(toolName: string, args: Record<string, unknown>): BackgroundTask {
+  create(toolName: string, args: Record<string, unknown>, toolCallId: string): BackgroundTask {
     const task: BackgroundTask = {
       id: this.generateId(),
+      toolCallId,
       toolName,
       args,
       status: "pending",
@@ -175,13 +138,16 @@ export class BackgroundTaskStore {
     if (!task) {
       return { cancelled: false, previousStatus: null };
     }
+
     const previousStatus = task.status;
     if (task.status === "running" || task.status === "pending") {
       task.abortController?.abort();
       task.status = "cancelled";
       task.completedAt = Date.now();
+      void this.notifyCompletion(id);
       return { cancelled: true, previousStatus };
     }
+
     return { cancelled: false, previousStatus };
   }
 
@@ -195,14 +161,9 @@ export class BackgroundTaskStore {
     }
   }
 
-  /**
-   * Register a callback to be invoked when a task completes.
-   * Returns an unsubscribe function.
-   */
   onComplete(taskId: string, callback: TaskCompletionCallback): () => void {
-    // Check if task already completed - invoke callback immediately
     const task = this.tasks.get(taskId);
-    if (task && (task.status === "completed" || task.status === "failed" || task.status === "cancelled")) {
+    if (task && TERMINAL_STATUSES.includes(task.status)) {
       void Promise.resolve().then(() => callback(task));
       return () => {};
     }
@@ -220,10 +181,6 @@ export class BackgroundTaskStore {
     };
   }
 
-  /**
-   * Notify all registered callbacks that a task has completed.
-   * Called internally after task status changes to completed/failed/cancelled.
-   */
   async notifyCompletion(taskId: string): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
@@ -232,17 +189,13 @@ export class BackgroundTaskStore {
     for (const cb of callbacks) {
       try {
         await cb(task);
-      } catch (e) {
-        console.error(`Background task completion callback error for ${taskId}:`, e);
+      } catch (error) {
+        console.error(`Background task completion callback error for ${taskId}:`, error);
       }
     }
     this.callbacks.delete(taskId);
   }
 }
-
-// ============================================================================
-// Timeout Utility
-// ============================================================================
 
 async function executeWithTimeout<R>(
   fn: () => R | Promise<R> | undefined,
@@ -295,45 +248,48 @@ async function executeWithTimeout<R>(
   });
 }
 
-// ============================================================================
-// Background Task Runner
-// ============================================================================
-
 /**
  * Runs a promise as a background task, tracking its progress and result.
  * Returns immediately with task info.
  */
-function runInBackground({
+export function runInBackground({
   store,
   toolName,
   toolArgs,
-  executionPromise,
+  executionFactory,
   timeoutMs,
   initialLog,
   onComplete,
+  toolCallId,
 }: RunInBackgroundOptions): BackgroundTaskResult {
-  const task = store.create(toolName, toolArgs);
+  const task = store.create(toolName, toolArgs, toolCallId);
   store.update(task.id, { status: "running" });
 
   if (initialLog) {
     store.addLog(task.id, { type: "info", message: initialLog });
   }
 
-  // Register completion callback if provided
   if (onComplete) {
     store.onComplete(task.id, onComplete);
   }
 
-  // Fire-and-forget execution
   void (async () => {
+    const finalizeTask = async (updates: Partial<BackgroundTask>) => {
+      store.update(task.id, {
+        ...updates,
+        completedAt: Date.now(),
+      });
+      await store.notifyCompletion(task.id);
+    };
+
     try {
+      const executionPromise = executionFactory(task.abortController?.signal);
       const result = await executeWithTimeout(
         () => executionPromise,
         timeoutMs,
         task.abortController?.signal
       );
 
-      // Auto-capture stdout/stderr from result
       if (result && typeof result === "object" && result !== null) {
         if ("stdout" in result && typeof result.stdout === "string" && result.stdout) {
           store.addLog(task.id, { type: "stdout", message: result.stdout });
@@ -343,21 +299,14 @@ function runInBackground({
         }
       }
 
-      store.update(task.id, {
-        status: "completed",
-        completedAt: Date.now(),
-        result,
-      });
-      await store.notifyCompletion(task.id);
+      await finalizeTask({ status: "completed", result });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       store.addLog(task.id, { type: "error", message: errorMessage });
-      store.update(task.id, {
+      await finalizeTask({
         status: error instanceof Error && error.name === "AbortError" ? "cancelled" : "failed",
-        completedAt: Date.now(),
         error: errorMessage,
       });
-      await store.notifyCompletion(task.id);
     }
   })();
 
@@ -366,173 +315,6 @@ function runInBackground({
     status: initialLog ? "converted_to_background" : "started",
   };
 }
-
-// ============================================================================
-// Shared Wrapped Execute Logic
-// ============================================================================
-
-const MAX_BACKGROUND_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-
-type ResolvedConfig = {
-  duration: number;
-  allowAgentSetDuration: boolean;
-  allowBackground: boolean;
-  maxAllowedAgentDuration: number;
-};
-
-function resolveConfig(config: ToolCallConfig): ResolvedConfig {
-  const {
-    duration = 60000,
-    allowAgentSetDuration = false,
-    allowBackground = false,
-  } = config;
-  const maxAllowedAgentDuration = config.maxAllowedAgentDuration
-    ?? (allowAgentSetDuration ? duration : 1800000);
-  return {
-    duration,
-    allowAgentSetDuration: allowAgentSetDuration || allowBackground,
-    allowBackground,
-    maxAllowedAgentDuration,
-  };
-}
-
-function augmentParametersSchema(
-  shape: ZodRawShape,
-  config: ResolvedConfig
-): ZodObject<ZodRawShape> {
-  const augmentedShape: ZodRawShape = { ...shape };
-
-  if (config.allowAgentSetDuration) {
-    augmentedShape.timeout = z
-      .number()
-      .optional()
-      .describe(
-        `Optional timeout in milliseconds (max: ${config.maxAllowedAgentDuration}ms). Default: ${config.duration}ms`
-      );
-  }
-
-  if (config.allowBackground) {
-    augmentedShape.background = z
-      .boolean()
-      .optional()
-      .describe(
-        "Set to true to run this tool in the background. Returns immediately with a task ID."
-      );
-  }
-
-  return z.object(augmentedShape);
-}
-
-function createWrappedExecute(
-  toolName: string,
-  originalExecute: (args: Record<string, unknown>, opts?: ToolExecuteOptions) => unknown | Promise<unknown>,
-  config: ResolvedConfig,
-  store: BackgroundTaskStore
-) {
-  const { duration, allowAgentSetDuration, allowBackground, maxAllowedAgentDuration } = config;
-
-  return async (
-    args: Record<string, unknown>,
-    opts?: ToolExecuteOptions
-  ): Promise<unknown> => {
-    const timeout = typeof args.timeout === "number" ? args.timeout : undefined;
-    const background = typeof args.background === "boolean" ? args.background : undefined;
-    const { timeout: _t, background: _b, ...toolArgs } = args;
-    void _t;
-    void _b;
-
-    const effectiveTimeout =
-      allowAgentSetDuration && timeout !== undefined
-        ? Math.min(timeout, maxAllowedAgentDuration)
-        : duration;
-
-    if (allowBackground && background) {
-      // Extract completion callback from operation context (systemContext is set via onToolStart hook)
-      const onComplete = (
-        opts?.systemContext?.get?.("onBackgroundTaskComplete") ||
-        opts?.context?.get?.("onBackgroundTaskComplete")
-      ) as TaskCompletionCallback | undefined;
-
-      return runInBackground({
-        store,
-        toolName,
-        toolArgs,
-        executionPromise: originalExecute(toolArgs, opts),
-        timeoutMs: effectiveTimeout,
-        onComplete,
-      });
-    }
-
-    const executionPromise = originalExecute(toolArgs, opts);
-    const abortSignal = opts?.toolContext?.abortSignal ?? opts?.abortController?.signal;
-
-    try {
-      return await executeWithTimeout(
-        () => executionPromise,
-        effectiveTimeout,
-        abortSignal
-      );
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("timed out")) {
-        return runInBackground({
-          store,
-          toolName,
-          toolArgs,
-          executionPromise,
-          timeoutMs: MAX_BACKGROUND_TIMEOUT,
-          initialLog: `Foreground execution timed out after ${effectiveTimeout}ms, converted to background task`,
-        });
-      }
-      throw error;
-    }
-  };
-}
-
-// ============================================================================
-// createWrappedTool
-// ============================================================================
-
-/**
- * Creates a tool with configurable timeout and background execution capabilities.
- *
- * @param options - Standard tool options plus toolCallConfig and store
- * @returns A Tool with augmented parameters based on config
- *
- * @example
- * ```ts
- * const store = new BackgroundTaskStore();
- * const myTool = createWrappedTool({
- *   name: "my_tool",
- *   description: "Does something",
- *   parameters: z.object({ input: z.string() }),
- *   store,
- *   toolCallConfig: {
- *     duration: 30000,
- *     allowAgentSetDuration: true,
- *     allowBackground: true,
- *   },
- *   execute: async ({ input }, options) => {
- *     // options.log?.({ type: 'info', message: 'Processing...' })
- *     return { result: input.toUpperCase() };
- *   },
- * });
- * ```
- */
-export function createWrappedTool(options: WrappedToolOptions): BaseTool {
-  const { name, description, toolCallConfig = {}, parameters, store, execute } = options;
-  const config = resolveConfig(toolCallConfig);
-
-  return createTool({
-    name,
-    description,
-    parameters: augmentParametersSchema(parameters.shape, config),
-    execute: createWrappedExecute(name, execute ?? (() => undefined), config, store),
-  });
-}
-
-// ============================================================================
-// Background Task Management Tools
-// ============================================================================
 
 const BACKGROUND_TASK_INSTRUCTIONS = `You have access to background task management tools for monitoring and controlling long-running operations.
 
@@ -555,10 +337,14 @@ When a tool is executed with \`background: true\`, it runs asynchronously and re
 Tasks persist in memory for the agent session. Use \`list_background_tasks\` to see all tasks.
 `;
 
-/**
- * Creates the background task management tools bound to a specific store.
- */
 function createBackgroundTaskTools(store: BackgroundTaskStore) {
+  const buildTaskResult = (task: BackgroundTask) => ({
+    taskId: task.id,
+    status: task.status,
+    ...(task.status === "completed" && { result: task.result }),
+    ...(task.status === "failed" && { error: task.error }),
+  });
+
   const getBackgroundTaskLogsTool = createTool({
     name: "get_background_task_logs",
     description: `Get logs from a background task.
@@ -578,16 +364,10 @@ Returns the task status, logs, and pagination info.`,
       if (!task) {
         return { error: `Task not found: ${taskId}` };
       }
+
       const { logs } = store.getLogs(taskId, offset, limit);
-      // Strip timestamps from logs for minimal context
       const minimalLogs = logs.map(({ type, message }) => ({ type, message }));
-      return {
-        taskId,
-        status: task.status,
-        logs: minimalLogs,
-        ...(task.status === "completed" && { result: task.result }),
-        ...(task.status === "failed" && { error: task.error }),
-      };
+      return { ...buildTaskResult(task), logs: minimalLogs };
     },
   });
 
@@ -623,17 +403,8 @@ Returns the final status and result.`,
           return { error: `Task not found: ${taskId}` };
         }
 
-        if (
-          task.status === "completed" ||
-          task.status === "failed" ||
-          task.status === "cancelled"
-        ) {
-          return {
-            taskId,
-            status: task.status,
-            ...(task.status === "completed" && { result: task.result }),
-            ...(task.status === "failed" && { error: task.error }),
-          };
+        if (TERMINAL_STATUSES.includes(task.status)) {
+          return buildTaskResult(task);
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -680,11 +451,11 @@ Useful for checking what tasks are running or have completed.`,
       let tasks = store.getAll();
 
       if (status !== "all") {
-        tasks = tasks.filter((t) => t.status === status);
+        tasks = tasks.filter((task) => task.status === status);
       }
 
       return {
-        tasks: tasks.map((t) => ({ id: t.id, status: t.status })),
+        tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
       };
     },
   });
@@ -697,12 +468,6 @@ Useful for checking what tasks are running or have completed.`,
   ];
 }
 
-/**
- * Creates a background task management toolkit bound to a specific store.
- *
- * @param store - The BackgroundTaskStore instance to use
- * @returns A Toolkit with tools for managing background tasks
- */
 export function createBackgroundTaskToolkit(store: BackgroundTaskStore): Toolkit {
   return createToolkit({
     name: "background_tasks",
@@ -712,77 +477,9 @@ export function createBackgroundTaskToolkit(store: BackgroundTaskStore): Toolkit
   });
 }
 
-/**
- * Adds the background task toolkit to a list of tools/toolkits.
- * Background task tools are always needed since any wrapped tool can convert to a
- * background task on timeout.
- *
- * @param tools - Array of tools and/or toolkits
- * @param store - The BackgroundTaskStore instance to use
- * @returns The tools array with backgroundTaskToolkit added
- *
- * @example
- * ```ts
- * const store = new BackgroundTaskStore();
- * const agent = new PlanAgent({
- *   tools: withBackgroundTaskTools([
- *     sandboxToolkit,
- *     webSearchTool,
- *   ], store),
- * });
- * ```
- */
 export function withBackgroundTaskTools<T extends ToolOrToolkit>(
   tools: T[],
   store: BackgroundTaskStore
 ): (T | Toolkit)[] {
   return [...tools, createBackgroundTaskToolkit(store)];
-}
-
-/**
- * Patches an existing tool's execute function and parameters to add background task support.
- * Uses Object.defineProperty to modify the tool in-place.
- *
- * @param tool - The tool to patch
- * @param store - The BackgroundTaskStore instance to use
- * @param config - Optional configuration for timeout and background behavior
- *
- * @example
- * ```ts
- * const store = new BackgroundTaskStore();
- * const writeTodos = agent.getTools().find(t => t.name === "write_todos");
- * if (writeTodos) {
- *   patchToolWithBackgroundSupport(writeTodos, store, { duration: 30000, allowBackground: true });
- * }
- * ```
- */
-export function patchToolWithBackgroundSupport(
-  tool: BaseTool,
-  store: BackgroundTaskStore,
-  config: ToolCallConfig = {}
-): void {
-  const originalExecute = tool.execute;
-  if (!originalExecute) return;
-
-  const resolvedConfig = resolveConfig(config);
-
-  // Patch execute function
-  Object.defineProperty(tool, "execute", {
-    value: createWrappedExecute(tool.name, originalExecute, resolvedConfig, store),
-    writable: true,
-    configurable: true,
-  });
-
-  // Patch parameters schema to include timeout/background fields
-  const originalParams = tool.parameters;
-  if (originalParams && typeof originalParams === "object" && "shape" in originalParams) {
-    Object.defineProperty(tool, "parameters", {
-      value: augmentParametersSchema(
-        (originalParams as ZodObject<ZodRawShape>).shape,
-        resolvedConfig
-      ),
-      writable: true,
-      configurable: true,
-    });
-  }
 }

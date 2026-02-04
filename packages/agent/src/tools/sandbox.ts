@@ -12,7 +12,8 @@ import {
 } from "@voltagent/core";
 import { z } from "zod";
 import type { worker } from "../../alchemy.run";
-import { BackgroundTaskStore, createWrappedTool, type WrappedExecuteOptions } from "./utils";
+import { type WrappedExecuteOptions, createWrappedTool } from "../utils/toolWTimeout";
+import { type BackgroundTaskStore } from "../utils/toolWBackground";
 
 /**
  * Escape a string for safe use in shell commands with single quotes.
@@ -379,7 +380,7 @@ Use this tool for:
 The working directory is /workspace by default. Commands run in an isolated sandbox environment.
 
 Important:
-- Commands have a default timeout of 2 minutes, then auto-convert to background task
+- Commands have a default timeout of 5 minutes, then auto-convert to background task
 - For known long-running commands, use the background option to run asynchronously from the start
 - Use absolute paths or paths relative to /workspace
 - If output exceeds ${maxOutputChars} characters, it will be written to a log file that you can explore using grep or read tools`,
@@ -389,9 +390,8 @@ Important:
     }),
     store,
     toolCallConfig: {
-      duration: 120000, // 2 minutes default
+      maxDuration: 5 * 60 * 1000, // 5 minutes
       allowAgentSetDuration: true,
-      maxAllowedAgentDuration: 600000, // 10 minutes max
       allowBackground: true,
     },
     execute: async (args, options?: WrappedExecuteOptions) => {
