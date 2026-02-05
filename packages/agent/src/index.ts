@@ -536,21 +536,24 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         this.state.inputModalities
       );
 
-      let lastUserMessage: { index: number; message: UIMessage } | null = null;
-      for (const [index, message] of filteredMessages.reverse().entries()) {
-        if (message.role === "user") {
-          lastUserMessage = { index, message };
+      let lastUserMessageIndex = -1;
+      for (let index = filteredMessages.length - 1; index >= 0; index -= 1) {
+        if (filteredMessages[index]?.role === "user") {
+          lastUserMessageIndex = index;
           break;
         }
       }
-      const retrievalMessage = lastUserMessage
-        ? await this.buildRetrievalMessage(extractMessageText(lastUserMessage.message))
-        : null;
+      const retrievalMessage =
+        lastUserMessageIndex >= 0
+          ? await this.buildRetrievalMessage(
+              extractMessageText(filteredMessages[lastUserMessageIndex]!)
+            )
+          : null;
       const modelMessages = retrievalMessage
         ? [
-            ...filteredMessages.slice(0, filteredMessages.length - 1 - (lastUserMessage?.index ?? 0)),
+            ...filteredMessages.slice(0, lastUserMessageIndex),
             retrievalMessage,
-            ...filteredMessages.slice(filteredMessages.length - 1 - (lastUserMessage?.index ?? 0)),
+            ...filteredMessages.slice(lastUserMessageIndex),
           ]
         : filteredMessages;
 
