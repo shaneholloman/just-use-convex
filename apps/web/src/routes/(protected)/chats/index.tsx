@@ -14,8 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SandboxSelector, selectedSandboxIdAtom } from "@/components/sandboxes/sandbox-selector";
-import { MessageSquare, Plus, MoreVertical, Trash2, Pin, Box } from "lucide-react";
+import { MessageSquare, Plus, MoreVertical, Trash2, Pin } from "lucide-react";
 
 export const Route = createFileRoute("/(protected)/chats/")({
   component: ChatsListPage,
