@@ -1,55 +1,11 @@
 import type { z } from "zod";
-import { api } from "../_generated/api";
-import type { zActionCtx, zMutationCtx, zQueryCtx } from "../functions";
+import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
 import { ROLE_HIERARCHY } from "../shared/auth_shared";
 
 function isAdminOrAbove(role: string) {
   const level = ROLE_HIERARCHY[role as keyof typeof ROLE_HIERARCHY] ?? 0;
   return level >= ROLE_HIERARCHY.admin;
-}
-
-async function toHexHash(bytes: Uint8Array) {
-  const data = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export async function CreateAttachmentFromBytes(
-  ctx: zActionCtx,
-  args: z.infer<typeof types.CreateFromBytesArgs>
-): Promise<ReturnType<typeof CreateAttachmentFromHash> & { url: string }> {
-  const hash = await toHexHash(args.fileBytes);
-  const size = args.fileBytes.byteLength;
-
-  const existing = await ctx.runQuery(api.attachments.index.getGlobalByHash, { hash });
-
-  let storageId = existing?.storageId;
-  if (!existing) {
-    const blob = new Blob([args.fileBytes], {
-      type: args.contentType ?? "application/octet-stream",
-    });
-    storageId = await ctx.storage.store(blob, { sha256: hash });
-  }
-
-  if (!storageId) {
-    throw new Error("Failed to resolve attachment storage id");
-  }
-
-  const result = await ctx.runMutation(api.attachments.index.createFromHash, {
-    hash,
-    storageId,
-    size,
-    fileName: args.fileName,
-    contentType: args.contentType,
-  });
-  const url = await ctx.storage.getUrl(storageId);
-  if (!url) {
-    throw new Error("Failed to generate attachment URL");
-  }
-  return { ...result, url };
 }
 
 export async function CreateAttachmentFromHash(
@@ -71,6 +27,8 @@ export async function CreateAttachmentFromHash(
       contentType: args.contentType,
     });
     globalAttachment = await ctx.table("globalAttachments").getX(globalAttachmentId);
+  } else {
+    await ctx.storage.delete(args.storageId);
   }
 
   if (!globalAttachment) {
@@ -87,10 +45,16 @@ export async function CreateAttachmentFromHash(
         .eq("globalAttachmentId", globalAttachment._id)
   ).unique();
 
+  const url = await ctx.storage.getUrl(globalAttachment.storageId);
+  if (!url) {
+    throw new Error("Failed to generate attachment URL");
+  }
+
   if (existingMemberAttachment) {
     return {
       globalAttachment: globalAttachment.doc(),
       orgMemberAttachment: existingMemberAttachment.doc(),
+      url,
     };
   }
 
@@ -108,6 +72,7 @@ export async function CreateAttachmentFromHash(
   return {
     globalAttachment: globalAttachment.doc(),
     orgMemberAttachment: orgMemberAttachment.doc(),
+    url,
   };
 }
 

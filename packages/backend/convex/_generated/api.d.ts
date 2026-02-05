@@ -8,12 +8,12 @@
  * @module
  */
 
-import type * as auth from "../auth.js";
 import type * as attachments_aggregates from "../attachments/aggregates.js";
 import type * as attachments_functions from "../attachments/functions.js";
 import type * as attachments_index from "../attachments/index.js";
 import type * as attachments_stats from "../attachments/stats.js";
 import type * as attachments_types from "../attachments/types.js";
+import type * as auth from "../auth.js";
 import type * as chats_aggregates from "../chats/aggregates.js";
 import type * as chats_functions from "../chats/functions.js";
 import type * as chats_index from "../chats/index.js";
@@ -31,9 +31,9 @@ import type * as sandboxes_index from "../sandboxes/index.js";
 import type * as sandboxes_stats from "../sandboxes/stats.js";
 import type * as sandboxes_types from "../sandboxes/types.js";
 import type * as shared_auth_shared from "../shared/auth_shared.js";
+import type * as tables_chats from "../tables/chats.js";
 import type * as tables_globalAttachments from "../tables/globalAttachments.js";
 import type * as tables_orgMemberAttachments from "../tables/orgMemberAttachments.js";
-import type * as tables_chats from "../tables/chats.js";
 import type * as tables_sandboxes from "../tables/sandboxes.js";
 import type * as tables_todoAssignedMembers from "../tables/todoAssignedMembers.js";
 import type * as tables_todos from "../tables/todos.js";
@@ -51,12 +51,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
   "attachments/aggregates": typeof attachments_aggregates;
   "attachments/functions": typeof attachments_functions;
   "attachments/index": typeof attachments_index;
   "attachments/stats": typeof attachments_stats;
   "attachments/types": typeof attachments_types;
+  auth: typeof auth;
   "chats/aggregates": typeof chats_aggregates;
   "chats/functions": typeof chats_functions;
   "chats/index": typeof chats_index;
@@ -74,9 +74,9 @@ declare const fullApi: ApiFromModules<{
   "sandboxes/stats": typeof sandboxes_stats;
   "sandboxes/types": typeof sandboxes_types;
   "shared/auth_shared": typeof shared_auth_shared;
+  "tables/chats": typeof tables_chats;
   "tables/globalAttachments": typeof tables_globalAttachments;
   "tables/orgMemberAttachments": typeof tables_orgMemberAttachments;
-  "tables/chats": typeof tables_chats;
   "tables/sandboxes": typeof tables_sandboxes;
   "tables/todoAssignedMembers": typeof tables_todoAssignedMembers;
   "tables/todos": typeof tables_todos;

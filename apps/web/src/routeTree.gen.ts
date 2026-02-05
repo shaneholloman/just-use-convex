@@ -144,12 +144,12 @@ export interface FileRoutesByFullPath {
   '/api/search': typeof ApiSearchRoute
   '/': typeof publicIndexRoute
   '/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
-  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/chats/$chatId': typeof protectedChatsChatIdRoute
   '/docs/$': typeof publicDocsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/chats/': typeof protectedChatsIndexRoute
   '/settings/': typeof protectedSettingsIndexRoute
+  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
   '/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
@@ -166,9 +166,9 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/chats': typeof protectedChatsIndexRoute
   '/settings': typeof protectedSettingsIndexRoute
+  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
-  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/settings/organization': typeof protectedSettingsOrganizationIndexRoute
 }
 export interface FileRoutesById {
@@ -184,12 +184,12 @@ export interface FileRoutesById {
   '/api/search': typeof ApiSearchRoute
   '/(public)/': typeof publicIndexRoute
   '/(protected)/settings/organization': typeof protectedSettingsOrganizationRouteRouteWithChildren
-  '/(protected)/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/(protected)/chats/$chatId': typeof protectedChatsChatIdRoute
   '/(public)/docs/$': typeof publicDocsSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/(protected)/chats/': typeof protectedChatsIndexRoute
   '/(protected)/settings/': typeof protectedSettingsIndexRoute
+  '/(protected)/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/(protected)/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/(protected)/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
   '/(protected)/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
@@ -211,9 +211,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/chats/'
     | '/settings/'
+    | '/settings/organization/attachments'
     | '/settings/organization/members'
     | '/settings/organization/teams'
-    | '/settings/organization/attachments'
     | '/settings/organization/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -228,10 +228,10 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/chats'
     | '/settings'
+    | '/settings/organization/attachments'
     | '/settings/organization/members'
     | '/settings/organization/teams'
     | '/settings/organization'
-    | '/settings/organization/attachments'
   id:
     | '__root__'
     | '/(protected)'
@@ -250,9 +250,9 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/(protected)/chats/'
     | '/(protected)/settings/'
+    | '/(protected)/settings/organization/attachments'
     | '/(protected)/settings/organization/members'
     | '/(protected)/settings/organization/teams'
-    | '/(protected)/settings/organization/attachments'
     | '/(protected)/settings/organization/'
   fileRoutesById: FileRoutesById
 }
@@ -422,7 +422,6 @@ const protectedChatsRouteRouteChildren: protectedChatsRouteRouteChildren = {
 const protectedChatsRouteRouteWithChildren =
   protectedChatsRouteRoute._addFileChildren(protectedChatsRouteRouteChildren)
 
- 
 interface protectedSettingsOrganizationRouteRouteChildren {
   protectedSettingsOrganizationAttachmentsRoute: typeof protectedSettingsOrganizationAttachmentsRoute
   protectedSettingsOrganizationMembersRoute: typeof protectedSettingsOrganizationMembersRoute

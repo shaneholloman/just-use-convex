@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Trash2Icon } from "lucide-react";
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useAttachments, useAttachmentsList, type AttachmentItem } from "@/hooks/use-attachments";
 import { useActiveMember, useMembers, ROLE_HIERARCHY, type MemberRole } from "@/hooks/auth/organization";
@@ -87,8 +87,13 @@ function AttachmentsSettings() {
   const { members, isPending: membersPending } = useMembers();
   const { currentUserRole } = useActiveMember();
   const [memberId, setMemberId] = useState<string>("me");
+  const [isHydrated, setIsHydrated] = useState(false);
   const { uploadAttachment, deleteAttachment, isUploading, isDeleting } = useAttachments();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   const isAdmin = useMemo(() => {
     if (!currentUserRole) return false;
@@ -103,7 +108,8 @@ function AttachmentsSettings() {
   const isLoading = attachmentsQuery.status === "LoadingFirstPage";
 
   const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.currentTarget.files;
+    const input = event.currentTarget;
+    const files = input.files;
     if (!files || files.length === 0) {
       return;
     }
@@ -117,7 +123,9 @@ function AttachmentsSettings() {
       });
     }
 
-    event.currentTarget.value = "";
+    if (input.isConnected) {
+      input.value = "";
+    }
   };
 
   return (
@@ -129,26 +137,30 @@ function AttachmentsSettings() {
             <CardDescription>Review and delete stored attachments for your organization.</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <div className="min-w-[220px]">
-                <Select
-                  value={memberId}
-                  onValueChange={(value) => value && setMemberId(value)}
-                  disabled={membersPending}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="me">My attachments</SelectItem>
-                    {members.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.user.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {isHydrated && isAdmin && (
+              <Select
+                value={memberId}
+                onValueChange={(value) => value && setMemberId(value)}
+                disabled={membersPending}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select member">
+                    {memberId === "me"
+                      ? "My attachments"
+                      : members.find((member) => member.id === memberId)?.user.name ||
+                        members.find((member) => member.id === memberId)?.user.email ||
+                        "Member"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="me">My attachments</SelectItem>
+                  {members.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.user.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             <input
               ref={fileInputRef}

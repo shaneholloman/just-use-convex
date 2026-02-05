@@ -1,12 +1,12 @@
 import * as functions from "./functions";
 import * as stats from "./stats";
 import * as types from "./types";
-import { zAction, zMutation, zQuery } from "../functions";
+import { zMutation, zQuery } from "../functions";
 
-export const createFromBytes = zAction({
-  args: types.CreateFromBytesArgs,
-  handler: async (ctx, args): Promise<ReturnType<typeof functions.CreateAttachmentFromBytes>> => {
-    return await functions.CreateAttachmentFromBytes(ctx, args);
+export const generateUploadUrl = zMutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
   },
 });
 
