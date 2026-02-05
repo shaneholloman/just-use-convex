@@ -28,15 +28,14 @@ export const addMemberIdToChats = migrations.define({
       return;
     }
 
-    const member = await (ctx.db as any)
-      .query("member")
-      .filter((q: any) =>
-        q.and(
-          q.eq(q.field("organizationId"), chat.organizationId),
-          q.eq(q.field("userId"), legacyUserId)
-        )
-      )
-      .first();
+    const member = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "member",
+      where: [
+        { field: "organizationId", operator: "eq", value: chat.organizationId },
+        { field: "userId", operator: "eq", value: legacyUserId },
+      ],
+      select: ["_id"],
+    });
 
     if (member) {
       await ctx.db.patch(chat._id, { memberId: member._id });
@@ -57,18 +56,46 @@ export const addMemberIdToTodos = migrations.define({
       return;
     }
 
-    const member = await (ctx.db as any)
-      .query("member")
-      .filter((q: any) =>
-        q.and(
-          q.eq(q.field("organizationId"), todo.organizationId),
-          q.eq(q.field("userId"), legacyUserId)
-        )
-      )
-      .first();
+    const member = await ctx.runQuery(components.betterAuth.adapter.findOne, {
+      model: "member",
+      where: [
+        { field: "organizationId", operator: "eq", value: todo.organizationId },
+        { field: "userId", operator: "eq", value: legacyUserId },
+      ],
+      select: ["_id"],
+    });
 
     if (member) {
       await ctx.db.patch(todo._id, { memberId: member._id });
+    }
+  },
+});
+
+export const deleteChatMissingMemberId = migrations.define({
+  table: "chats",
+  migrateOne: async (ctx, chat) => {
+    if (chat._id === "jd704qq9mz8pkdee0vb46jbva17zw3kz") {
+      await ctx.db.delete(chat._id);
+    }
+  },
+});
+
+export const deleteChatsWithoutMemberId = migrations.define({
+  table: "chats",
+  migrateOne: async (ctx, chat) => {
+    const rawChat = chat as Record<string, unknown>;
+    if (typeof rawChat.memberId !== "string") {
+      await ctx.db.delete(chat._id);
+    }
+  },
+});
+
+export const deleteTodosWithoutMemberId = migrations.define({
+  table: "todos",
+  migrateOne: async (ctx, todo) => {
+    const rawTodo = todo as Record<string, unknown>;
+    if (typeof rawTodo.memberId !== "string") {
+      await ctx.db.delete(todo._id);
     }
   },
 });

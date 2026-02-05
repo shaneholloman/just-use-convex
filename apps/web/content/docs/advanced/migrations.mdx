@@ -5,22 +5,16 @@ description: Safely evolve your schema with @convex-dev/migrations
 
 # Migrations
 
-The `@convex-dev/migrations` component enables stateful database migrations in Convex. Use it when you need to backfill data, add required fields to existing documents, or transform data across your tables.
+The `@convex-dev/migrations` component enables stateful, resumable migrations. Use it for backfills, required-field changes, or data transforms across existing documents.
 
 ## Why Migrations?
 
-Convex validates your schema on deploy. If you add a required field to a table with existing documents, deployment fails:
+Convex validates your schema on deploy. Adding a required field to a table with existing documents fails unless you backfill first.
 
-```
-Schema validation failed.
-Document with ID "jd704qq..." in table "chats" does not match the schema:
-Object is missing the required field `isPinned`.
-```
-
-Migrations solve this by letting you:
-1. Deploy with an optional field
-2. Backfill existing documents
-3. Make the field required
+Migrations let you:
+1. Deploy with a safe schema (optional/legacy fields allowed)
+2. Backfill or transform data
+3. Tighten the schema and clean up
 
 ## Installation
 
@@ -76,7 +70,7 @@ export const addIsPinnedToChats = migrations.define({
 
 ### Returning a Patch
 
-If `migrateOne` returns an object, it's automatically applied as a patch:
+If `migrateOne` returns an object, it is applied as a patch:
 
 ```ts
 export const setDefaultPriority = migrations.define({
@@ -119,15 +113,11 @@ export const normalizeEmails = migrations.define({
 
 ## Running Migrations
 
-### From the CLI
-
-Run a specific migration:
+Run a specific migration from the CLI:
 
 ```bash
 bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}' --prod
 ```
-
-### During Deployment
 
 Chain migration execution with deployment:
 
@@ -149,43 +139,48 @@ The CLI returns migration status:
 }
 ```
 
-## Adding Required Fields Workflow
+## Required Field Workflow (Correct)
 
-When adding a required field to an existing table:
+Use this sequence any time you add a required field or remove a legacy field.
 
-### Step 1: Make the Field Optional
+### Step 1: Make the Change Safe
+
+Allow the old and new shapes to coexist.
 
 ```ts
 // convex/tables/chats.ts
 export const chatsZodSchema = {
   organizationId: z.string(),
-  userId: z.string(),
+  memberId: z.string().optional(),
   title: z.string(),
-  isPinned: z.boolean().optional(), // Start optional
+  isPinned: z.boolean().optional(),
   updatedAt: z.number(),
 };
 ```
 
-### Step 2: Deploy with Migration Code
+### Step 2: Deploy the Safe Schema + Migration Code
 
 ```bash
 bunx convex deploy -y
 ```
 
-### Step 3: Run the Migration
+### Step 3: Run the Migration (Dev, then Prod)
 
 ```bash
+bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}'
 bunx convex run migrations:run '{"fn": "migrations:addIsPinnedToChats"}' --prod
 ```
 
-### Step 4: Make the Field Required
+### Step 4: Tighten the Schema
+
+Make the field required and remove legacy fields after backfill.
 
 ```ts
 export const chatsZodSchema = {
   organizationId: z.string(),
-  userId: z.string(),
+  memberId: z.string(),
   title: z.string(),
-  isPinned: z.boolean(), // Now required
+  isPinned: z.boolean(),
   updatedAt: z.number(),
 };
 ```
@@ -195,6 +190,10 @@ export const chatsZodSchema = {
 ```bash
 bunx convex deploy -y
 ```
+
+### Step 6: Cleanup
+
+Delete temporary migrations and legacy-field handling once all environments are updated.
 
 ## Batch Processing
 
@@ -259,7 +258,7 @@ If migrations depend on each other, document the order:
 
 ### 5. Clean Up Old Migrations
 
-After migrations have run on all environments, consider removing them to keep the codebase clean.
+After migrations have run on all environments, remove them to keep the codebase clean.
 
 ## Troubleshooting
 
@@ -268,8 +267,8 @@ After migrations have run on all environments, consider removing them to keep th
 If deployment fails with schema validation errors:
 1. Make the new field optional
 2. Deploy
-3. Run migration
-4. Make field required
+3. Run the migration
+4. Make the field required
 5. Deploy again
 
 ### Migration Timeout
