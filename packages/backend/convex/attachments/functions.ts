@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
 import { ROLE_HIERARCHY } from "../shared/auth_shared";
+import { withInvalidCursorRetry } from "../shared/pagination";
 
 function isAdminOrAbove(role: string) {
   const level = ROLE_HIERARCHY[role as keyof typeof ROLE_HIERARCHY] ?? 0;
@@ -131,21 +132,11 @@ export async function ListOrgMemberAttachments(
     throw new Error("You are not authorized to view other members' attachments");
   }
 
-  let attachments;
-  try {
-    attachments = await runListOrgMemberAttachmentsQuery(ctx, args, requestedMemberId);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes("InvalidCursor")) {
-      attachments = await runListOrgMemberAttachmentsQuery(
-        ctx,
-        { ...args, paginationOpts: { ...args.paginationOpts, cursor: null } },
-        requestedMemberId
-      );
-    } else {
-      throw error;
-    }
-  }
+  const attachments = await withInvalidCursorRetry(
+    args,
+    (nextArgs) => runListOrgMemberAttachmentsQuery(ctx, nextArgs, requestedMemberId),
+    (nextArgs) => ({ ...nextArgs, paginationOpts: { ...nextArgs.paginationOpts, cursor: null } })
+  );
 
   const attachmentsWithGlobal = await Promise.all(
     attachments.page.map(async (attachment) => {

@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
+import { withInvalidCursorRetry } from "../shared/pagination";
 
 async function runTodosQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
   return ctx.table("todos", 'organizationId', (q) => q
@@ -55,20 +56,11 @@ export async function ListTodos(ctx: zQueryCtx, args: z.infer<typeof types.ListA
   }
 
   let todos;
-  try {
-    todos = await runTodosQuery(ctx, args);
-  } catch (error) {
-    // Handle invalid cursor error by retrying without cursor
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes("InvalidCursor")) {
-      todos = await runTodosQuery(ctx, {
-        ...args,
-        paginationOpts: { ...args.paginationOpts, cursor: null },
-      });
-    } else {
-      throw error;
-    }
-  }
+  todos = await withInvalidCursorRetry(
+    args,
+    (nextArgs) => runTodosQuery(ctx, nextArgs),
+    (nextArgs) => ({ ...nextArgs, paginationOpts: { ...nextArgs.paginationOpts, cursor: null } })
+  );
 
   // Filter by assigned user if specified (post-pagination JS filter)
   if (assignedTodoIds !== null) {

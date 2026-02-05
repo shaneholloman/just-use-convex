@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
+import { withInvalidCursorRetry } from "../shared/pagination";
 
 async function runSandboxesQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
   return ctx.table("sandboxes", "organizationId_userId", (q) => q
@@ -27,22 +28,11 @@ async function runSandboxesQuery(ctx: zQueryCtx, args: z.infer<typeof types.List
 }
 
 export async function ListSandboxes(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
-  let sandboxes;
-  try {
-    sandboxes = await runSandboxesQuery(ctx, args);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes("InvalidCursor")) {
-      sandboxes = await runSandboxesQuery(ctx, {
-        ...args,
-        paginationOpts: { ...args.paginationOpts, cursor: null },
-      });
-    } else {
-      throw error;
-    }
-  }
-
-  return sandboxes;
+  return withInvalidCursorRetry(
+    args,
+    (nextArgs) => runSandboxesQuery(ctx, nextArgs),
+    (nextArgs) => ({ ...nextArgs, paginationOpts: { ...nextArgs.paginationOpts, cursor: null } })
+  );
 }
 
 export async function GetSandbox(ctx: zQueryCtx, args: z.infer<typeof types.GetArgs>) {

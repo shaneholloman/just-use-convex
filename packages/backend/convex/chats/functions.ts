@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
+import { withInvalidCursorRetry } from "../shared/pagination";
 
 async function runChatsQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
   return ctx.table("chats", "organizationId_memberId_isPinned", (q) => q
@@ -28,20 +29,11 @@ async function runChatsQuery(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs
 }
 
 export async function ListChats(ctx: zQueryCtx, args: z.infer<typeof types.ListArgs>) {
-  let chats;
-  try {
-    chats = await runChatsQuery(ctx, args);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes("InvalidCursor")) {
-      chats = await runChatsQuery(ctx, {
-        ...args,
-        paginationOpts: { ...args.paginationOpts, cursor: null },
-      });
-    } else {
-      throw error;
-    }
-  }
+  const chats = await withInvalidCursorRetry(
+    args,
+    (nextArgs) => runChatsQuery(ctx, nextArgs),
+    (nextArgs) => ({ ...nextArgs, paginationOpts: { ...nextArgs.paginationOpts, cursor: null } })
+  );
 
   // Map over paginated results to include sandbox data
   const chatsWithSandbox = await Promise.all(
