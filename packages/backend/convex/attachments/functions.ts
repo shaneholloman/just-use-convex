@@ -14,13 +14,13 @@ export async function CreateAttachmentFromHash(
 ) {
   let globalAttachment = await ctx.table("globalAttachments", "hash", (q) =>
     q.eq("hash", args.hash)
-  ).unique();
+  ).first();
 
   if (!globalAttachment) {
     if (!args.storageId) {
       throw new Error("Storage id is required for new global attachments");
     }
-    const globalAttachmentId = await ctx.db.insert("globalAttachments", {
+    const globalAttachmentId = await ctx.table("globalAttachments").insert({
       hash: args.hash,
       storageId: args.storageId,
       size: args.size,
@@ -28,7 +28,9 @@ export async function CreateAttachmentFromHash(
     });
     globalAttachment = await ctx.table("globalAttachments").getX(globalAttachmentId);
   } else {
-    await ctx.storage.delete(args.storageId);
+    if (args.storageId && args.storageId !== globalAttachment.storageId) {
+      await ctx.storage.delete(args.storageId);
+    }
   }
 
   if (!globalAttachment) {
@@ -101,9 +103,23 @@ export async function GetGlobalAttachmentByHash(
 ) {
   const attachment = await ctx.table("globalAttachments", "hash", (q) =>
     q.eq("hash", args.hash)
-  ).unique();
+  ).first();
 
   return attachment ? attachment.doc() : null;
+}
+
+async function runListOrgMemberAttachmentsQuery(
+  ctx: zQueryCtx,
+  args: z.infer<typeof types.ListOrgMemberAttachmentsArgs>,
+  memberId: string
+) {
+  return ctx.table("orgMemberAttachments", "organizationId_memberId", (q) =>
+    q
+      .eq("organizationId", ctx.identity.activeOrganizationId)
+      .eq("memberId", memberId)
+  )
+    .order("desc")
+    .paginate(args.paginationOpts);
 }
 
 export async function ListOrgMemberAttachments(
@@ -111,17 +127,25 @@ export async function ListOrgMemberAttachments(
   args: z.infer<typeof types.ListOrgMemberAttachmentsArgs>
 ) {
   const requestedMemberId = args.memberId ?? ctx.identity.memberId;
-  if (args.memberId && !isAdminOrAbove(ctx.identity.organizationRole)) {
+  if (args.memberId && args.memberId !== ctx.identity.memberId && !isAdminOrAbove(ctx.identity.organizationRole)) {
     throw new Error("You are not authorized to view other members' attachments");
   }
 
-  const attachments = await ctx.table("orgMemberAttachments", "organizationId_memberId", (q) =>
-    q
-      .eq("organizationId", ctx.identity.activeOrganizationId)
-      .eq("memberId", requestedMemberId)
-  )
-    .order("desc")
-    .paginate(args.paginationOpts);
+  let attachments;
+  try {
+    attachments = await runListOrgMemberAttachmentsQuery(ctx, args, requestedMemberId);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("InvalidCursor")) {
+      attachments = await runListOrgMemberAttachmentsQuery(
+        ctx,
+        { ...args, paginationOpts: { ...args.paginationOpts, cursor: null } },
+        requestedMemberId
+      );
+    } else {
+      throw error;
+    }
+  }
 
   const attachmentsWithGlobal = await Promise.all(
     attachments.page.map(async (attachment) => {
