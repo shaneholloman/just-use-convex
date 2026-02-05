@@ -30,8 +30,7 @@ const orgMemberAttachmentsTable = OrgMemberAttachments.table
   .index("organizationId_memberId", ["organizationId", "memberId", "updatedAt"])
   .index("organizationId_memberId_globalAttachmentId", ["organizationId", "memberId", "globalAttachmentId"])
   .index("organizationId", ["organizationId", "updatedAt"])
-  .index("memberId", ["memberId"])
-  .index("globalAttachmentId", ["globalAttachmentId"]);
+  .index("memberId", ["memberId"]);
 
 export const orgMemberAttachmentsEnt = defineEntFromTable(orgMemberAttachmentsTable)
   .edge("globalAttachment", { to: "globalAttachments", field: "globalAttachmentId" });
