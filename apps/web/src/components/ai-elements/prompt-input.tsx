@@ -436,7 +436,6 @@ export const PromptInput = ({
         return;
       }
 
-      let uploads: { id: string; file: File; blobUrl: string }[] = [];
       setItems((prev) => {
         const capacity =
           typeof maxFiles === "number"
@@ -451,50 +450,19 @@ export const PromptInput = ({
           });
         }
         const next: (FileUIPart & { id: string })[] = [];
-        uploads = capped.map((file) => {
-          const id = nanoid();
-          const blobUrl = URL.createObjectURL(file);
+        for (const file of capped) {
           next.push({
-            id,
+            id: nanoid(),
             type: "file",
-            url: blobUrl,
+            url: URL.createObjectURL(file),
             mediaType: file.type,
             filename: file.name,
           });
-          return { id, file, blobUrl };
-        });
+        }
         return prev.concat(next);
       });
-
-      if (uploadAttachment && uploads.length > 0) {
-        for (const upload of uploads) {
-          void (async () => {
-            try {
-              const buffer = await upload.file.arrayBuffer();
-              const result = await uploadAttachment({
-                fileBytes: new Uint8Array(buffer),
-                fileName: upload.file.name,
-                contentType: upload.file.type || undefined,
-              });
-              if (!result?.url) {
-                return;
-              }
-              setItems((prev) =>
-                prev.map((item) =>
-                  item.id === upload.id ? { ...item, url: result.url } : item
-                )
-              );
-              if (upload.blobUrl.startsWith("blob:")) {
-                URL.revokeObjectURL(upload.blobUrl);
-              }
-            } catch {
-              // keep local blob URL so user can retry via submit
-            }
-          })();
-        }
-      }
     },
-    [matchesAccept, maxFiles, maxFileSize, onError, uploadAttachment]
+    [matchesAccept, maxFiles, maxFileSize, onError]
   );
 
   const removeLocal = useCallback(
@@ -739,11 +707,61 @@ export const PromptInput = ({
           return (formData.get("message") as string) || "";
         })();
 
+    const snapshotFiles = files;
+    const snapshotSources = referencedSources;
+    const snapshotText = text;
+
     // Reset form immediately after capturing text to avoid race condition
     // where user input during async blob conversion would be lost
     if (!usingProvider) {
       form.reset();
     }
+
+    const setTextareaValue = (nextValue: string) => {
+      if (usingProvider) {
+        return;
+      }
+      const messageField = form.elements.namedItem("message");
+      if (messageField instanceof HTMLTextAreaElement) {
+        messageField.value = nextValue;
+      }
+    };
+
+    const optimisticClear = () => {
+      if (!usingProvider) {
+        setItems([]);
+      }
+      setReferencedSources([]);
+      if (usingProvider) {
+        controller.textInput.setInput("");
+      }
+    };
+
+    const restoreOnError = () => {
+      if (!usingProvider) {
+        setItems(snapshotFiles);
+      }
+      setReferencedSources(snapshotSources);
+      if (usingProvider) {
+        controller.textInput.setInput(snapshotText);
+      } else {
+        setTextareaValue(snapshotText);
+      }
+    };
+
+    const finalizeSuccess = () => {
+      if (!usingProvider) {
+        for (const file of snapshotFiles) {
+          if (file.url?.startsWith("blob:")) {
+            URL.revokeObjectURL(file.url);
+          }
+        }
+      }
+      clear();
+      if (usingProvider) {
+        controller.textInput.clear();
+      }
+    };
 
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
@@ -760,34 +778,24 @@ export const PromptInput = ({
       })
     )
       .then((convertedFiles: FileUIPart[]) => {
+        let result: void | Promise<void>;
         try {
-          const result = onSubmit({ text, files: convertedFiles }, event);
-
-          // Handle both sync and async onSubmit
-          if (result instanceof Promise) {
-            result
-              .then(() => {
-                clear();
-                if (usingProvider) {
-                  controller.textInput.clear();
-                }
-              })
-              .catch(() => {
-                // Don't clear on error - user may want to retry
-              });
-          } else {
-            // Sync function completed without throwing, clear inputs
-            clear();
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
-          }
+          result = onSubmit({ text, files: convertedFiles }, event);
         } catch {
-          // Don't clear on error - user may want to retry
+          restoreOnError();
+          return;
+        }
+
+        optimisticClear();
+
+        if (result instanceof Promise) {
+          result.then(finalizeSuccess).catch(restoreOnError);
+        } else {
+          finalizeSuccess();
         }
       })
       .catch(() => {
-        // Don't clear on error - user may want to retry
+        restoreOnError();
       });
   };
 

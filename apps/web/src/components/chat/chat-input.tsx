@@ -67,40 +67,10 @@ export const ChatInput = memo(function ChatInput({
     [setSettings, setDefaultSettings, hasMessages]
   );
 
-  const handleSubmit = useCallback(
-    async ({ text, files }: { text: string; files: FileUIPart[] }) => {
-      const uploadedFiles = await Promise.all(
-        files.map(async (file) => {
-          if (file.url.startsWith("data:") || file.url.startsWith("blob:")) {
-            const response = await fetch(file.url);
-            const buffer = await response.arrayBuffer();
-            const result = await uploadAttachment({
-              fileBytes: new Uint8Array(buffer),
-              fileName: file.filename ?? "file",
-              contentType: file.mediaType,
-            });
-            return {
-              type: "file",
-              url: result.url,
-              mediaType: file.mediaType,
-              filename: file.filename,
-            } satisfies FileUIPart;
-          }
-          return file;
-        })
-      );
-
-      await onSubmit({ text, files: uploadedFiles });
-    },
-    [onSubmit, uploadAttachment]
-  );
-
-  const submitStatus = isUploading && status === "ready" ? "submitted" : status;
-
   return (
     <div className="pb-1 mx-auto w-4xl">
       <PromptInput
-        onSubmit={handleSubmit}
+        onSubmit={onSubmit}
         multiple
         uploadAttachment={uploadAttachment}
         isUploading={isUploading}
@@ -124,7 +94,7 @@ export const ChatInput = memo(function ChatInput({
               />
             )}
           </PromptInputTools>
-          <PromptInputSubmit status={submitStatus} onStop={onStop} disabled={isUploading} />
+          <PromptInputSubmit status={status} onStop={onStop} />
         </PromptInputFooter>
       </PromptInput>
     </div>
