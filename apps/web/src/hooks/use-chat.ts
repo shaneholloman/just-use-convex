@@ -123,7 +123,7 @@ export function useChat(chat: AgentChatInstance | null, agent: AgentConnection =
       files,
     }: {
       text: string;
-      files: Array<{ url: string; mediaType: string; filename?: string }>;
+      files: FileUIPart[];
     }) => {
       if (!sendMessage) return;
       if (!text.trim() && files.length === 0) return;
@@ -134,14 +134,7 @@ export function useChat(chat: AgentChatInstance | null, agent: AgentConnection =
         parts.push({ type: "text", text });
       }
 
-      for (const file of files) {
-        parts.push({
-          type: "file",
-          url: file.url,
-          mediaType: file.mediaType,
-          filename: file.filename,
-        });
-      }
+      parts.push(...files);
 
       await sendMessage({
         role: "user",

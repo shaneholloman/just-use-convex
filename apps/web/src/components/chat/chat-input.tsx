@@ -1,9 +1,11 @@
 import { PaperclipIcon } from "lucide-react";
 import type { OpenRouterModel } from "@/hooks/use-openrouter-models";
+import type { FileUIPart } from "ai";
 import type { useAgentChat } from "@cloudflare/ai-chat/react";
 import { memo, useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { defaultChatSettingsAtom } from "@/store/models";
+import { useAttachments } from "@/hooks/use-attachments";
 
 export type ChatSettings = {
   model?: string;
@@ -29,7 +31,7 @@ import { ChatModelSelector } from "./chat-model-selector";
 import { ReasoningEffortSelector } from "./reasoning-effort-selector";
 
 export type ChatInputProps = {
-  onSubmit: (message: { text: string; files: Array<{ url: string; mediaType: string; filename?: string }> }) => void;
+  onSubmit: (message: { text: string; files: FileUIPart[] }) => void;
   status: NonNullable<ReturnType<typeof useAgentChat>>["status"];
   onStop?: () => void;
   settings: ChatSettings;
@@ -53,6 +55,7 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const supportsReasoning = selectedModel?.supports_reasoning ?? false;
   const setDefaultSettings = useSetAtom(defaultChatSettingsAtom);
+  const { uploadAttachment } = useAttachments();
 
   const handleReasoningChange = useCallback(
     (effort: ChatSettings["reasoningEffort"]) => {
@@ -64,12 +67,37 @@ export const ChatInput = memo(function ChatInput({
     [setSettings, setDefaultSettings, hasMessages]
   );
 
+  const handleSubmit = useCallback(
+    async ({ text, files }: { text: string; files: FileUIPart[] }) => {
+      const uploadedFiles = await Promise.all(
+        files.map(async (file) => {
+          if (file.url.startsWith("data:") || file.url.startsWith("blob:")) {
+            const response = await fetch(file.url);
+            const buffer = await response.arrayBuffer();
+            const result = await uploadAttachment({
+              fileBytes: new Uint8Array(buffer),
+              fileName: file.filename ?? "file",
+              contentType: file.mediaType,
+            });
+            return {
+              type: "file",
+              url: result.url,
+              mediaType: file.mediaType,
+              filename: file.filename,
+            } satisfies FileUIPart;
+          }
+          return file;
+        })
+      );
+
+      await onSubmit({ text, files: uploadedFiles });
+    },
+    [onSubmit, uploadAttachment]
+  );
+
   return (
     <div className="pb-1 mx-auto w-4xl">
-      <PromptInput
-        onSubmit={({ text, files }) => onSubmit({ text, files })}
-        multiple
-      >
+      <PromptInput onSubmit={handleSubmit} multiple>
         <PromptInputAttachmentsDisplay />
         <PromptInputTextarea placeholder="Type a message..." />
         <PromptInputFooter>

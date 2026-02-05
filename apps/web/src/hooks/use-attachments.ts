@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useConvexMutation, useConvexPaginatedQuery } from "@convex-dev/react-query";
+import { useConvexAction, useConvexMutation, useConvexPaginatedQuery } from "@convex-dev/react-query";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
@@ -12,6 +12,16 @@ const INITIAL_NUM_ITEMS = 20;
 const EMPTY_FILTERS: AttachmentFilters = {};
 
 export function useAttachments() {
+  const uploadMutation = useMutation({
+    mutationFn: useConvexAction(api.attachments.index.createFromBytes),
+    onSuccess: () => {
+      toast.success("Attachment uploaded");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to upload attachment");
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: useConvexMutation(api.attachments.index.deleteAttachment),
     onSuccess: () => {
@@ -23,7 +33,9 @@ export function useAttachments() {
   });
 
   return {
+    uploadAttachment: uploadMutation.mutateAsync,
     deleteAttachment: deleteMutation.mutateAsync,
+    isUploading: uploadMutation.isPending,
     isDeleting: deleteMutation.isPending,
   };
 }

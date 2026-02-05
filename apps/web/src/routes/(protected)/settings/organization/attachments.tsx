@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Trash2Icon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useAttachments, useAttachmentsList, type AttachmentItem } from "@/hooks/use-attachments";
 import { useActiveMember, useMembers, ROLE_HIERARCHY, type MemberRole } from "@/hooks/auth/organization";
@@ -87,7 +87,8 @@ function AttachmentsSettings() {
   const { members, isPending: membersPending } = useMembers();
   const { currentUserRole } = useActiveMember();
   const [memberId, setMemberId] = useState<string>("me");
-  const { deleteAttachment, isDeleting } = useAttachments();
+  const { uploadAttachment, deleteAttachment, isUploading, isDeleting } = useAttachments();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = useMemo(() => {
     if (!currentUserRole) return false;
@@ -101,6 +102,24 @@ function AttachmentsSettings() {
   const hasResults = attachmentsQuery.results.length > 0;
   const isLoading = attachmentsQuery.status === "LoadingFirstPage";
 
+  const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.currentTarget.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    for (const file of Array.from(files)) {
+      const buffer = await file.arrayBuffer();
+      await uploadAttachment({
+        fileBytes: new Uint8Array(buffer),
+        fileName: file.name,
+        contentType: file.type || undefined,
+      });
+    }
+
+    event.currentTarget.value = "";
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -109,27 +128,43 @@ function AttachmentsSettings() {
             <CardTitle>Attachments</CardTitle>
             <CardDescription>Review and delete stored attachments for your organization.</CardDescription>
           </div>
-          {isAdmin && (
-            <div className="min-w-[220px]">
-              <Select
-                value={memberId}
-                onValueChange={(value) => value && setMemberId(value)}
-                disabled={membersPending}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select member" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="me">My attachments</SelectItem>
-                  {members.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.user.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <div className="min-w-[220px]">
+                <Select
+                  value={memberId}
+                  onValueChange={(value) => value && setMemberId(value)}
+                  disabled={membersPending}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="me">My attachments</SelectItem>
+                    {members.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              onChange={handleUpload}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? "Uploading..." : "Upload"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (

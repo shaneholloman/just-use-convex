@@ -20,13 +20,13 @@ async function toHexHash(bytes: Uint8Array) {
 export async function CreateAttachmentFromBytes(
   ctx: zActionCtx,
   args: z.infer<typeof types.CreateFromBytesArgs>
-): ReturnType<typeof CreateAttachmentFromHash> {
+): Promise<ReturnType<typeof CreateAttachmentFromHash> & { url: string }> {
   const hash = await toHexHash(args.fileBytes);
   const size = args.fileBytes.byteLength;
 
   const existing = await ctx.runQuery(api.attachments.index.getGlobalByHash, { hash });
 
-  let storageId: string | undefined;
+  let storageId = existing?.storageId;
   if (!existing) {
     const blob = new Blob([args.fileBytes], {
       type: args.contentType ?? "application/octet-stream",
@@ -34,13 +34,22 @@ export async function CreateAttachmentFromBytes(
     storageId = await ctx.storage.store(blob, { sha256: hash });
   }
 
-  return await ctx.runMutation(api.attachments.index.createFromHash, {
+  if (!storageId) {
+    throw new Error("Failed to resolve attachment storage id");
+  }
+
+  const result = await ctx.runMutation(api.attachments.index.createFromHash, {
     hash,
     storageId,
     size,
     fileName: args.fileName,
     contentType: args.contentType,
   });
+  const url = await ctx.storage.getUrl(storageId);
+  if (!url) {
+    throw new Error("Failed to generate attachment URL");
+  }
+  return { ...result, url };
 }
 
 export async function CreateAttachmentFromHash(
