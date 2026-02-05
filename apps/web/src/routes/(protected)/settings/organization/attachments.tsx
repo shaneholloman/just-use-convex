@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Trash2Icon } from "lucide-react";
+import { DownloadIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import { useAttachments, useAttachmentsList, type AttachmentItem } from "@/hooks/use-attachments";
@@ -56,29 +56,42 @@ function AttachmentRow({
           <span>{format(new Date(attachment.updatedAt), "MMM d, yyyy")}</span>
         </div>
       </div>
-      <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" disabled={isDeleting} />}>
-          <Trash2Icon className="size-3.5" />
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete attachment</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the attachment from the organization. The underlying file is deleted only when no
-              members reference it.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => onDelete(attachment._id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={!attachment.url}
+          onClick={() => {
+            if (!attachment.url) return;
+            window.open(attachment.url, "_blank", "noopener,noreferrer");
+          }}
+        >
+          <DownloadIcon className="size-3.5" />
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" disabled={isDeleting} />}>
+            <Trash2Icon className="size-3.5" />
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete attachment</AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the attachment from the organization. The underlying file is deleted only when no
+                members reference it.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => onDelete(attachment._id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

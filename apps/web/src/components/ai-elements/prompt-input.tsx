@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
+import type { useAttachments } from "@/hooks/use-attachments";
 import {
   CornerDownLeftIcon,
   ImageIcon,
@@ -339,6 +340,8 @@ export type PromptInputProps = Omit<
   // Minimal constraints
   maxFiles?: number;
   maxFileSize?: number; // bytes
+  uploadAttachment?: ReturnType<typeof useAttachments>["uploadAttachment"];
+  isUploading?: boolean;
   onError?: (err: {
     code: "max_files" | "max_file_size" | "accept";
     message: string;
@@ -357,6 +360,8 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  uploadAttachment,
+  isUploading,
   onError,
   onSubmit,
   children,
@@ -431,6 +436,7 @@ export const PromptInput = ({
         return;
       }
 
+      let uploads: { id: string; file: File; blobUrl: string }[] = [];
       setItems((prev) => {
         const capacity =
           typeof maxFiles === "number"
@@ -445,19 +451,50 @@ export const PromptInput = ({
           });
         }
         const next: (FileUIPart & { id: string })[] = [];
-        for (const file of capped) {
+        uploads = capped.map((file) => {
+          const id = nanoid();
+          const blobUrl = URL.createObjectURL(file);
           next.push({
-            id: nanoid(),
+            id,
             type: "file",
-            url: URL.createObjectURL(file),
+            url: blobUrl,
             mediaType: file.type,
             filename: file.name,
           });
-        }
+          return { id, file, blobUrl };
+        });
         return prev.concat(next);
       });
+
+      if (uploadAttachment && uploads.length > 0) {
+        for (const upload of uploads) {
+          void (async () => {
+            try {
+              const buffer = await upload.file.arrayBuffer();
+              const result = await uploadAttachment({
+                fileBytes: new Uint8Array(buffer),
+                fileName: upload.file.name,
+                contentType: upload.file.type || undefined,
+              });
+              if (!result?.url) {
+                return;
+              }
+              setItems((prev) =>
+                prev.map((item) =>
+                  item.id === upload.id ? { ...item, url: result.url } : item
+                )
+              );
+              if (upload.blobUrl.startsWith("blob:")) {
+                URL.revokeObjectURL(upload.blobUrl);
+              }
+            } catch {
+              // keep local blob URL so user can retry via submit
+            }
+          })();
+        }
+      }
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [matchesAccept, maxFiles, maxFileSize, onError, uploadAttachment]
   );
 
   const removeLocal = useCallback(
@@ -690,6 +727,9 @@ export const PromptInput = ({
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (isUploading) {
+      return;
+    }
 
     const form = event.currentTarget;
     const text = usingProvider

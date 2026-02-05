@@ -55,7 +55,7 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const supportsReasoning = selectedModel?.supports_reasoning ?? false;
   const setDefaultSettings = useSetAtom(defaultChatSettingsAtom);
-  const { uploadAttachment } = useAttachments();
+  const { uploadAttachment, isUploading } = useAttachments();
 
   const handleReasoningChange = useCallback(
     (effort: ChatSettings["reasoningEffort"]) => {
@@ -95,9 +95,16 @@ export const ChatInput = memo(function ChatInput({
     [onSubmit, uploadAttachment]
   );
 
+  const submitStatus = isUploading && status === "ready" ? "submitted" : status;
+
   return (
     <div className="pb-1 mx-auto w-4xl">
-      <PromptInput onSubmit={handleSubmit} multiple>
+      <PromptInput
+        onSubmit={handleSubmit}
+        multiple
+        uploadAttachment={uploadAttachment}
+        isUploading={isUploading}
+      >
         <PromptInputAttachmentsDisplay />
         <PromptInputTextarea placeholder="Type a message..." />
         <PromptInputFooter>
@@ -117,7 +124,7 @@ export const ChatInput = memo(function ChatInput({
               />
             )}
           </PromptInputTools>
-          <PromptInputSubmit status={status} onStop={onStop} />
+          <PromptInputSubmit status={submitStatus} onStop={onStop} disabled={isUploading} />
         </PromptInputFooter>
       </PromptInput>
     </div>

@@ -124,10 +124,15 @@ export async function ListOrgMemberAttachments(
     .paginate(args.paginationOpts);
 
   const attachmentsWithGlobal = await Promise.all(
-    attachments.page.map(async (attachment) => ({
-      ...attachment.doc(),
-      globalAttachment: (await attachment.edge("globalAttachment")).doc(),
-    }))
+    attachments.page.map(async (attachment) => {
+      const globalAttachment = await attachment.edge("globalAttachment");
+      const url = await ctx.storage.getUrl(globalAttachment.storageId);
+      return {
+        ...attachment.doc(),
+        globalAttachment: globalAttachment.doc(),
+        url,
+      };
+    })
   );
 
   return {
