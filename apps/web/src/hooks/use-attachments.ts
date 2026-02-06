@@ -1,15 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { useConvexMutation, useConvexPaginatedQuery } from "@convex-dev/react-query";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
-import type { z } from "zod";
-import * as attachmentTypes from "@just-use-convex/backend/convex/attachments/types";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
+import type { CreateFromBytesArgs } from "@just-use-convex/backend/convex/attachments/types";
+import { z } from "zod";
 
 type ListArgs = FunctionArgs<typeof api.attachments.index.list>;
 export type AttachmentFilters = Omit<ListArgs, "paginationOpts">;
 export type AttachmentItem = FunctionReturnType<typeof api.attachments.index.list>["page"][number];
 type CreateFromHashResult = FunctionReturnType<typeof api.attachments.index.createFromHash>;
+
 
 const INITIAL_NUM_ITEMS = 20;
 const EMPTY_FILTERS: AttachmentFilters = {};
@@ -26,7 +27,7 @@ export function useAttachments() {
   const uploadMutation = useMutation({
     mutationKey: ["attachments", "upload"],
     mutationFn: async (
-      args: z.infer<typeof attachmentTypes.CreateFromBytesArgs> & {
+      args: z.infer<typeof CreateFromBytesArgs> & {
         onProgress?: (progress: number) => void;
         signal?: AbortSignal;
       }
