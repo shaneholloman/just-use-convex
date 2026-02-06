@@ -1,15 +1,6 @@
 import { chatsByOrg, chatsByMember } from "./aggregates";
 import type { zQueryCtx } from "../functions";
-
-// Helper to create bounds for exact key match
-function exactBounds<K>(key: K) {
-  return {
-    bounds: {
-      lower: { key, inclusive: true },
-      upper: { key, inclusive: true },
-    },
-  };
-}
+import { exactBounds } from "../shared/aggregates";
 
 // ═══════════════════════════════════════════════════════════════════
 // MEMBER STATS (for the current member's chats)

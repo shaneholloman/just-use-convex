@@ -42,7 +42,7 @@ type InitArgs = {
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
   inputModalities?: string[];
-  tokenConfig: TokenConfig;
+  tokenConfig?: TokenConfig;
 };
 
 // Map MIME type prefixes to OpenRouter modality names
@@ -78,6 +78,12 @@ function filterMessageParts(messages: UIMessage[], inputModalities?: string[]): 
       return isMimeTypeSupported(part.mediaType, inputModalities);
     }),
   }));
+}
+
+function sanitizeFilename(filename: string): string {
+  const base = filename.split(/[\\/]/).pop() ?? "file";
+  const sanitized = base.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return sanitized.length > 0 ? sanitized : "file";
 }
 
 export default {
@@ -138,6 +144,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
         const { url, filename } = part;
         if (!filename) continue;
+        const safeFilename = sanitizeFilename(filename);
+        const filePath = `${uploadDir}/${safeFilename}`;
 
         try {
           // Handle data URLs (base64 encoded)
@@ -145,15 +153,16 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
             const base64Match = url.match(/^data:[^;]+;base64,(.+)$/);
             if (base64Match?.[1]) {
               const binaryContent = atob(base64Match[1]);
-              const filePath = `${uploadDir}/${filename}`;
               await this.sandboxBackend.write(filePath, binaryContent);
               continue;
             }
           }
           if (url.startsWith("http://") || url.startsWith("https://")) {
-            const filePath = `${uploadDir}/${filename}`;
+            if (!url.startsWith("https://")) {
+              throw new Error("Only https URLs are allowed for sandbox downloads");
+            }
             const result = await this.sandboxBackend.exec(
-              `curl -L --fail --silent --show-error ${escapeShellArg(url)} -o ${escapeShellArg(filePath)}`
+              `curl -L --fail --silent --show-error --connect-timeout 5 --max-time 20 --max-filesize 52428800 ${escapeShellArg(url)} -o ${escapeShellArg(filePath)}`
             );
             if (!result.success) {
               throw new Error(`Failed to curl ${url}: ${result.stderr}`);
@@ -289,9 +298,13 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   
   private async _init(args?: InitArgs): Promise<void> {
     if (args) {
-      this.ctx.storage.put("initArgs", args);
+      await this.ctx.storage.put("initArgs", args);
     }
-    const { model, reasoningEffort, inputModalities, tokenConfig } = (await this.ctx.storage.get("initArgs")) as InitArgs;
+    const initArgs = (args ?? (await this.ctx.storage.get("initArgs"))) as InitArgs | null;
+    if (!initArgs) {
+      throw new Error("Agent not initialized: missing initArgs");
+    }
+    const { model, reasoningEffort, inputModalities, tokenConfig } = initArgs;
     const state = this.state ?? {};
     if (
       (!state.model && model) ||
@@ -473,7 +486,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       model: url.searchParams.get("model") ?? undefined,
       reasoningEffort: url.searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
       inputModalities: inputModalitiesRaw ? inputModalitiesRaw.split(",") : undefined,
-      tokenConfig: parseTokenFromUrl(url) ?? { type: "jwt", token: "" },
+      tokenConfig: parseTokenFromUrl(url) ?? undefined,
     });
     return await super.onRequest(request);
   }
@@ -485,10 +498,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       model: url.searchParams.get("model") ?? undefined,
       reasoningEffort: url.searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
       inputModalities: inputModalitiesRaw ? inputModalitiesRaw.split(",") : undefined,
-      tokenConfig: parseTokenFromUrl(url) ?? {
-        type: "jwt",
-        token: "",
-      },
+      tokenConfig: parseTokenFromUrl(url) ?? undefined,
     });
     await this._prepAgent();
     return await super.onConnect(connection, ctx);

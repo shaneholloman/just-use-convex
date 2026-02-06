@@ -26,6 +26,7 @@ export const Route = createFileRoute("/(protected)/settings/organization/attachm
 });
 
 const PAGE_SIZE = 20;
+const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0 B";
@@ -127,17 +128,22 @@ function AttachmentsSettings() {
       return;
     }
 
-    for (const file of Array.from(files)) {
-      const buffer = await file.arrayBuffer();
-      await uploadAttachment({
-        fileBytes: new Uint8Array(buffer),
-        fileName: file.name,
-        contentType: file.type || undefined,
-      });
-    }
-
-    if (input.isConnected) {
-      input.value = "";
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+          continue;
+        }
+        const buffer = await file.arrayBuffer();
+        await uploadAttachment({
+          fileBytes: new Uint8Array(buffer),
+          fileName: file.name,
+          contentType: file.type || undefined,
+        });
+      }
+    } finally {
+      if (input.isConnected) {
+        input.value = "";
+      }
     }
   };
 

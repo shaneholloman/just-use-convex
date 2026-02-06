@@ -109,7 +109,6 @@ async function uploadBlobWithProgress(
   return await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", uploadUrl);
-    xhr.responseType = "json";
     xhr.setRequestHeader("Content-Type", contentType ?? "application/octet-stream");
 
     if (onProgress) {
@@ -126,15 +125,12 @@ async function uploadBlobWithProgress(
 
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`Upload failed (${xhr.status})`));
-        return;
-      }
-      if (xhr.response && typeof xhr.response === "object") {
-        resolve(xhr.response as { storageId: string });
+        const errorBody = xhr.responseText?.trim();
+        reject(new Error(errorBody ? `Upload failed (${xhr.status}): ${errorBody}` : `Upload failed (${xhr.status})`));
         return;
       }
       try {
-        resolve(JSON.parse(xhr.responseText ?? "{}") as { storageId: string });
+        resolve(JSON.parse(xhr.responseText || "{}") as { storageId: string });
       } catch {
         reject(new Error("Upload failed (invalid response)"));
       }

@@ -14,6 +14,12 @@ export const handleCors = httpAction(async (_ctx, request) => {
   });
 });
 
+http.route({
+  pathPrefix: "/",
+  method: "OPTIONS",
+  handler: handleCors,
+});
+
 export default http;
 
 function buildCorsHeaders(request: Request): Record<string, string> {
@@ -24,7 +30,7 @@ function buildCorsHeaders(request: Request): Record<string, string> {
     "http://localhost:3001",
     "http://127.0.0.1:3001",
   ].filter(Boolean) as string[];
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : "*";
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : "null";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",

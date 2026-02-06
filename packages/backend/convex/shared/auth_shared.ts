@@ -43,3 +43,13 @@ export const ROLES = roleKeys.map((key) => ({
   value: key,
   label: key.charAt(0).toUpperCase() + key.slice(1),
 }));
+
+export function isMemberRole(role: string): role is MemberRole {
+  return role in ROLE_HIERARCHY;
+}
+
+export function isAdminOrAbove(role: string) {
+  if (!isMemberRole(role)) return false;
+  const level = ROLE_HIERARCHY[role] ?? 0;
+  return level >= ROLE_HIERARCHY.admin;
+}

@@ -8,6 +8,7 @@ import {
   todosByCreatorStatus,
 } from "./aggregates";
 import type { zQueryCtx } from "../functions";
+import { exactBounds } from "../shared/aggregates";
 
 // ═══════════════════════════════════════════════════════════════════
 // SHARED HELPERS (reusable across all stats functions)
@@ -15,16 +16,6 @@ import type { zQueryCtx } from "../functions";
 
 const STATUS_VALUES = ["todo", "in_progress", "done"] as const;
 const PRIORITY_VALUES = ["low", "medium", "high"] as const;
-
-// Helper to create bounds for exact key match
-function exactBounds<K>(key: K) {
-  return {
-    bounds: {
-      lower: { key, inclusive: true },
-      upper: { key, inclusive: true },
-    },
-  };
-}
 
 async function getStatusCounts(ctx: zQueryCtx, namespace: string) {
   const counts = await Promise.all(

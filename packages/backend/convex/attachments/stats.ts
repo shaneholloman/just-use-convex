@@ -1,14 +1,6 @@
 import { orgMemberAttachmentsByOrg, orgMemberAttachmentsByMember } from "./aggregates";
 import type { zQueryCtx } from "../functions";
-
-function exactBounds<K>(key: K) {
-  return {
-    bounds: {
-      lower: { key, inclusive: true },
-      upper: { key, inclusive: true },
-    },
-  };
-}
+import { exactBounds } from "../shared/aggregates";
 
 export async function GetMemberAttachmentStats(ctx: zQueryCtx) {
   const orgId = ctx.identity.activeOrganizationId;

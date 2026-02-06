@@ -1,18 +1,8 @@
 import type { z } from "zod";
 import type { zMutationCtx, zQueryCtx } from "../functions";
 import * as types from "./types";
-import { ROLE_HIERARCHY, type MemberRole } from "../shared/auth_shared";
+import { isAdminOrAbove } from "../shared/auth_shared";
 import { withInvalidCursorRetry } from "../shared/pagination";
-
-function isMemberRole(role: string): role is MemberRole {
-  return role in ROLE_HIERARCHY;
-}
-
-function isAdminOrAbove(role: string) {
-  if (!isMemberRole(role)) return false;
-  const level = ROLE_HIERARCHY[role] ?? 0;
-  return level >= ROLE_HIERARCHY.admin;
-}
 
 export async function CreateAttachmentFromHash(
   ctx: zMutationCtx,
@@ -178,9 +168,9 @@ export async function DeleteOrgMemberAttachment(
 
   const remaining = await ctx.table("orgMemberAttachments", "globalAttachmentId", (q) =>
     q.eq("globalAttachmentId", globalAttachmentId)
-  );
+  ).first();
 
-  if (remaining.length > 0) {
+  if (remaining) {
     return true;
   }
 

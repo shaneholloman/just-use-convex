@@ -391,7 +391,7 @@ export const AttachmentProgress = ({
     <div
       className={cn(
         "pointer-events-none absolute inset-x-1 bottom-1",
-        variant === "list" && "static inset-auto w-full",
+        variant === "list" && "inset-x-3 bottom-2",
         variant === "inline" && "static inset-auto w-20",
         className
       )}
