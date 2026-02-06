@@ -41,6 +41,7 @@ type ChatState = {
 type InitArgs = {
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
+  inputModalities?: string[];
   tokenConfig: TokenConfig;
 };
 
@@ -290,16 +291,18 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     if (args) {
       this.ctx.storage.put("initArgs", args);
     }
-    const { model, reasoningEffort, tokenConfig } = (await this.ctx.storage.get("initArgs")) as InitArgs;
+    const { model, reasoningEffort, inputModalities, tokenConfig } = (await this.ctx.storage.get("initArgs")) as InitArgs;
     const state = this.state ?? {};
     if (
       (!state.model && model) ||
-      (!state.reasoningEffort && reasoningEffort)
+      (!state.reasoningEffort && reasoningEffort) ||
+      (!state.inputModalities && inputModalities)
     ) {
       this.setState({
         ...state,
         ...(model && { model }),
         ...(reasoningEffort && { reasoningEffort }),
+        ...(inputModalities && { inputModalities }),
       });
     }
 
@@ -328,16 +331,19 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
 
     }
 
-    if (model || reasoningEffort) {
+    if (model || reasoningEffort || inputModalities) {
       await this.ctx.storage.put("chatState", {
         model: model ?? this.state?.model,
         reasoningEffort: reasoningEffort ?? this.state?.reasoningEffort,
+        inputModalities: inputModalities ?? this.state?.inputModalities,
       } satisfies ChatState);
     }
   }
 
   private async _prepAgent(): Promise<PlanAgent> {
-    setWaitUntil(this.ctx.waitUntil.bind(this.ctx));
+    const boundWaitUntil = this.ctx.waitUntil.bind(this.ctx);
+    setWaitUntil(boundWaitUntil);
+    this.backgroundTaskStore.setWaitUntil(boundWaitUntil);
     const registry = AgentRegistry.getInstance();
     if (this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY) {
       registry.setGlobalVoltOpsClient(
@@ -461,19 +467,25 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   }
 
   override async onRequest(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    const inputModalitiesRaw = url.searchParams.get("inputModalities");
     await this._init({
-      model: (new URL(request.url)).searchParams.get("model") ?? undefined,
-      reasoningEffort: (new URL(request.url)).searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
-      tokenConfig: parseTokenFromUrl(new URL(request.url)) ?? { type: "jwt", token: "" },
+      model: url.searchParams.get("model") ?? undefined,
+      reasoningEffort: url.searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
+      inputModalities: inputModalitiesRaw ? inputModalitiesRaw.split(",") : undefined,
+      tokenConfig: parseTokenFromUrl(url) ?? { type: "jwt", token: "" },
     });
     return await super.onRequest(request);
   }
 
   override async onConnect(connection: Connection, ctx: ConnectionContext): Promise<void> {
+    const url = new URL(ctx.request.url);
+    const inputModalitiesRaw = url.searchParams.get("inputModalities");
     await this._init({
-      model: (new URL(ctx.request.url)).searchParams.get("model") ?? undefined,
-      reasoningEffort: (new URL(ctx.request.url)).searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
-      tokenConfig: parseTokenFromUrl(new URL(ctx.request.url)) ?? {
+      model: url.searchParams.get("model") ?? undefined,
+      reasoningEffort: url.searchParams.get("reasoningEffort") as "low" | "medium" | "high" | undefined,
+      inputModalities: inputModalitiesRaw ? inputModalitiesRaw.split(",") : undefined,
+      tokenConfig: parseTokenFromUrl(url) ?? {
         type: "jwt",
         token: "",
       },
