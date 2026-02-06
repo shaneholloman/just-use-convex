@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
+import type { useAttachments } from "@/hooks/use-attachments";
 import {
   CornerDownLeftIcon,
   ImageIcon,
@@ -339,6 +340,8 @@ export type PromptInputProps = Omit<
   // Minimal constraints
   maxFiles?: number;
   maxFileSize?: number; // bytes
+  uploadAttachment: ReturnType<typeof useAttachments>["uploadAttachment"];
+  isUploading: boolean;
   onError?: (err: {
     code: "max_files" | "max_file_size" | "accept";
     message: string;
@@ -357,6 +360,8 @@ export const PromptInput = ({
   syncHiddenInput,
   maxFiles,
   maxFileSize,
+  uploadAttachment,
+  isUploading,
   onError,
   onSubmit,
   children,
@@ -371,7 +376,13 @@ export const PromptInput = ({
   const formRef = useRef<HTMLFormElement | null>(null);
 
   // ----- Local attachments (only used when no provider)
-  const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
+  const [items, setItems] = useState<
+    (FileUIPart & {
+      id: string;
+      uploadProgress?: number;
+      uploadStatus?: "uploading" | "done" | "error";
+    })[]
+  >([]);
   const files = usingProvider ? controller.attachments.files : items;
 
   // ----- Local referenced sources (always local to PromptInput)
@@ -409,6 +420,28 @@ export const PromptInput = ({
     [accept]
   );
 
+  const updateLocalFile = useCallback(
+    (
+      id: string,
+      updater: (
+        item: FileUIPart & {
+          id: string;
+          uploadProgress?: number;
+          uploadStatus?: "uploading" | "done" | "error";
+        }
+      ) => FileUIPart & {
+        id: string;
+        uploadProgress?: number;
+        uploadStatus?: "uploading" | "done" | "error";
+      }
+    ) => {
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? updater(item) : item))
+      );
+    },
+    []
+  );
+
   const addLocal = useCallback(
     (fileList: File[] | FileList) => {
       const incoming = Array.from(fileList);
@@ -431,33 +464,89 @@ export const PromptInput = ({
         return;
       }
 
-      setItems((prev) => {
-        const capacity =
-          typeof maxFiles === "number"
-            ? Math.max(0, maxFiles - prev.length)
-            : undefined;
-        const capped =
-          typeof capacity === "number" ? sized.slice(0, capacity) : sized;
-        if (typeof capacity === "number" && sized.length > capacity) {
-          onError?.({
-            code: "max_files",
-            message: "Too many files. Some were not added.",
-          });
-        }
-        const next: (FileUIPart & { id: string })[] = [];
-        for (const file of capped) {
-          next.push({
-            id: nanoid(),
-            type: "file",
+      const currentCount = filesRef.current.length;
+      const capacity =
+        typeof maxFiles === "number"
+          ? Math.max(0, maxFiles - currentCount)
+          : undefined;
+      const capped =
+        typeof capacity === "number" ? sized.slice(0, capacity) : sized;
+      if (typeof capacity === "number" && sized.length > capacity) {
+        onError?.({
+          code: "max_files",
+          message: "Too many files. Some were not added.",
+        });
+      }
+
+      if (capped.length === 0) {
+        return;
+      }
+
+      const uploadFiles = async () => {
+        const optimisticItems = capped.map((file) => ({
+          id: nanoid(),
+          file,
+          item: {
+            type: "file" as const,
             url: URL.createObjectURL(file),
             mediaType: file.type,
             filename: file.name,
-          });
-        }
-        return prev.concat(next);
-      });
+            uploadProgress: 0,
+            uploadStatus: "uploading" as const,
+          },
+        }));
+
+        setItems((prev) =>
+          prev.concat(optimisticItems.map(({ id, item }) => ({ id, ...item })))
+        );
+
+        await Promise.all(
+          optimisticItems.map(async ({ id, file }) => {
+            try {
+              const bytes = new Uint8Array(await file.arrayBuffer());
+              const uploaded = await uploadAttachment({
+                fileBytes: bytes,
+                fileName: file.name,
+                contentType: file.type || undefined,
+                onProgress: (progress) => {
+                  updateLocalFile(id, (item) => ({
+                    ...item,
+                    uploadProgress: progress,
+                  }));
+                },
+              });
+
+              updateLocalFile(id, (item) => {
+                if (item.url?.startsWith("blob:")) {
+                  URL.revokeObjectURL(item.url);
+                }
+                return {
+                  ...item,
+                  url: uploaded.url,
+                  uploadProgress: 100,
+                  uploadStatus: "done",
+                };
+              });
+            } catch {
+              updateLocalFile(id, (item) => ({
+                ...item,
+                uploadStatus: "error",
+              }));
+            }
+          })
+        );
+      };
+
+      void uploadFiles();
     },
-    [matchesAccept, maxFiles, maxFileSize, onError]
+    [
+      matchesAccept,
+      maxFiles,
+      maxFileSize,
+      onError,
+      uploadAttachment,
+      updateLocalFile,
+    ]
   );
 
   const removeLocal = useCallback(
@@ -690,6 +779,13 @@ export const PromptInput = ({
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();
+    if (isUploading) {
+      return;
+    }
+
+    const filesToSubmit = files.filter(
+      (file) => !("uploadStatus" in file) || file.uploadStatus !== "error"
+    );
 
     const form = event.currentTarget;
     const text = usingProvider
@@ -699,15 +795,65 @@ export const PromptInput = ({
           return (formData.get("message") as string) || "";
         })();
 
+    const snapshotFiles = files;
+    const snapshotSources = referencedSources;
+    const snapshotText = text;
+
     // Reset form immediately after capturing text to avoid race condition
     // where user input during async blob conversion would be lost
     if (!usingProvider) {
       form.reset();
     }
 
+    const setTextareaValue = (nextValue: string) => {
+      if (usingProvider) {
+        return;
+      }
+      const messageField = form.elements.namedItem("message");
+      if (messageField instanceof HTMLTextAreaElement) {
+        messageField.value = nextValue;
+      }
+    };
+
+    const optimisticClear = () => {
+      if (!usingProvider) {
+        setItems([]);
+      }
+      setReferencedSources([]);
+      if (usingProvider) {
+        controller.textInput.setInput("");
+      }
+    };
+
+    const restoreOnError = () => {
+      if (!usingProvider) {
+        setItems(snapshotFiles);
+      }
+      setReferencedSources(snapshotSources);
+      if (usingProvider) {
+        controller.textInput.setInput(snapshotText);
+      } else {
+        setTextareaValue(snapshotText);
+      }
+    };
+
+    const finalizeSuccess = () => {
+      if (!usingProvider) {
+        for (const file of snapshotFiles) {
+          if (file.url?.startsWith("blob:")) {
+            URL.revokeObjectURL(file.url);
+          }
+        }
+      }
+      clear();
+      if (usingProvider) {
+        controller.textInput.clear();
+      }
+    };
+
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
-      files.map(async ({ id, ...item }) => {
+      filesToSubmit.map(async ({ id, ...item }) => {
         if (item.url?.startsWith("blob:")) {
           const dataUrl = await convertBlobUrlToDataUrl(item.url);
           // If conversion failed, keep the original blob URL
@@ -720,34 +866,24 @@ export const PromptInput = ({
       })
     )
       .then((convertedFiles: FileUIPart[]) => {
+        let result: void | Promise<void>;
         try {
-          const result = onSubmit({ text, files: convertedFiles }, event);
-
-          // Handle both sync and async onSubmit
-          if (result instanceof Promise) {
-            result
-              .then(() => {
-                clear();
-                if (usingProvider) {
-                  controller.textInput.clear();
-                }
-              })
-              .catch(() => {
-                // Don't clear on error - user may want to retry
-              });
-          } else {
-            // Sync function completed without throwing, clear inputs
-            clear();
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
-          }
+          result = onSubmit({ text, files: convertedFiles }, event);
         } catch {
-          // Don't clear on error - user may want to retry
+          restoreOnError();
+          return;
+        }
+
+        optimisticClear();
+
+        if (result instanceof Promise) {
+          result.then(finalizeSuccess).catch(restoreOnError);
+        } else {
+          finalizeSuccess();
         }
       })
       .catch(() => {
-        // Don't clear on error - user may want to retry
+        restoreOnError();
       });
   };
 

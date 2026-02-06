@@ -28,6 +28,7 @@ import { Route as protectedSettingsOrganizationRouteRouteImport } from './routes
 import { Route as protectedSettingsOrganizationIndexRouteImport } from './routes/(protected)/settings/organization/index'
 import { Route as protectedSettingsOrganizationTeamsRouteImport } from './routes/(protected)/settings/organization/teams'
 import { Route as protectedSettingsOrganizationMembersRouteImport } from './routes/(protected)/settings/organization/members'
+import { Route as protectedSettingsOrganizationAttachmentsRouteImport } from './routes/(protected)/settings/organization/attachments'
 
 const publicRouteRoute = publicRouteRouteImport.update({
   id: '/(public)',
@@ -126,6 +127,12 @@ const protectedSettingsOrganizationMembersRoute =
     path: '/members',
     getParentRoute: () => protectedSettingsOrganizationRouteRoute,
   } as any)
+const protectedSettingsOrganizationAttachmentsRoute =
+  protectedSettingsOrganizationAttachmentsRouteImport.update({
+    id: '/attachments',
+    path: '/attachments',
+    getParentRoute: () => protectedSettingsOrganizationRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/chats': typeof protectedChatsRouteRouteWithChildren
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/chats/': typeof protectedChatsIndexRoute
   '/settings/': typeof protectedSettingsIndexRoute
+  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
   '/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
@@ -158,6 +166,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/chats': typeof protectedChatsIndexRoute
   '/settings': typeof protectedSettingsIndexRoute
+  '/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
   '/settings/organization': typeof protectedSettingsOrganizationIndexRoute
@@ -180,6 +189,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/(protected)/chats/': typeof protectedChatsIndexRoute
   '/(protected)/settings/': typeof protectedSettingsIndexRoute
+  '/(protected)/settings/organization/attachments': typeof protectedSettingsOrganizationAttachmentsRoute
   '/(protected)/settings/organization/members': typeof protectedSettingsOrganizationMembersRoute
   '/(protected)/settings/organization/teams': typeof protectedSettingsOrganizationTeamsRoute
   '/(protected)/settings/organization/': typeof protectedSettingsOrganizationIndexRoute
@@ -201,6 +211,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/chats/'
     | '/settings/'
+    | '/settings/organization/attachments'
     | '/settings/organization/members'
     | '/settings/organization/teams'
     | '/settings/organization/'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/chats'
     | '/settings'
+    | '/settings/organization/attachments'
     | '/settings/organization/members'
     | '/settings/organization/teams'
     | '/settings/organization'
@@ -238,6 +250,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/(protected)/chats/'
     | '/(protected)/settings/'
+    | '/(protected)/settings/organization/attachments'
     | '/(protected)/settings/organization/members'
     | '/(protected)/settings/organization/teams'
     | '/(protected)/settings/organization/'
@@ -386,6 +399,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof protectedSettingsOrganizationMembersRouteImport
       parentRoute: typeof protectedSettingsOrganizationRouteRoute
     }
+    '/(protected)/settings/organization/attachments': {
+      id: '/(protected)/settings/organization/attachments'
+      path: '/attachments'
+      fullPath: '/settings/organization/attachments'
+      preLoaderRoute: typeof protectedSettingsOrganizationAttachmentsRouteImport
+      parentRoute: typeof protectedSettingsOrganizationRouteRoute
+    }
   }
 }
 
@@ -403,6 +423,7 @@ const protectedChatsRouteRouteWithChildren =
   protectedChatsRouteRoute._addFileChildren(protectedChatsRouteRouteChildren)
 
 interface protectedSettingsOrganizationRouteRouteChildren {
+  protectedSettingsOrganizationAttachmentsRoute: typeof protectedSettingsOrganizationAttachmentsRoute
   protectedSettingsOrganizationMembersRoute: typeof protectedSettingsOrganizationMembersRoute
   protectedSettingsOrganizationTeamsRoute: typeof protectedSettingsOrganizationTeamsRoute
   protectedSettingsOrganizationIndexRoute: typeof protectedSettingsOrganizationIndexRoute
@@ -410,6 +431,8 @@ interface protectedSettingsOrganizationRouteRouteChildren {
 
 const protectedSettingsOrganizationRouteRouteChildren: protectedSettingsOrganizationRouteRouteChildren =
   {
+    protectedSettingsOrganizationAttachmentsRoute:
+      protectedSettingsOrganizationAttachmentsRoute,
     protectedSettingsOrganizationMembersRoute:
       protectedSettingsOrganizationMembersRoute,
     protectedSettingsOrganizationTeamsRoute:

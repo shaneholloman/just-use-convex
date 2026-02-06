@@ -16,6 +16,7 @@ import { v, type Infer } from "convex/values";
 import { allTodoAggregates } from "./todos/aggregates";
 import { allChatAggregates } from "./chats/aggregates";
 import { allSandboxAggregates } from "./sandboxes/aggregates";
+import { allAttachmentAggregates } from "./attachments/aggregates";
 
 const EXTERNAL_TOKEN = process.env.EXTERNAL_TOKEN ?? "meow";
 
@@ -34,6 +35,11 @@ for (const aggregate of allChatAggregates) {
 // Register all aggregate triggers for sandboxes table
 for (const aggregate of allSandboxAggregates) {
   triggers.register("sandboxes", aggregate.trigger());
+}
+
+// Register all aggregate triggers for orgMemberAttachments table
+for (const aggregate of allAttachmentAggregates) {
+  triggers.register("orgMemberAttachments", aggregate.trigger());
 }
 
 // Wrap base mutations with triggers

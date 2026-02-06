@@ -123,9 +123,9 @@ function AgentInstanceInner({
     onMessage: handleMessage,
     query: {
       token: token ?? null,
-      // Pass defaults - backend will only use if state is empty
       model: defaultSettings.model,
       reasoningEffort: defaultSettings.reasoningEffort ?? null,
+      inputModalities: defaultSettings.inputModalities?.join(",") ?? null,
     },
   });
 

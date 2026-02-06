@@ -28,4 +28,8 @@ app.use(aggregate, { name: "chatsByMember" });
 app.use(aggregate, { name: "sandboxesByOrg" });
 app.use(aggregate, { name: "sandboxesByUser" });
 
+// Attachment aggregates
+app.use(aggregate, { name: "orgMemberAttachmentsByOrg" });
+app.use(aggregate, { name: "orgMemberAttachmentsByMember" });
+
 export default app;

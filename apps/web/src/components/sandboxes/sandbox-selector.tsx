@@ -113,7 +113,9 @@ export function SandboxSelector() {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem
-            onClick={() => setSelectedSandboxId(null)}
+            onClick={() => {
+              setSelectedSandboxId(null);
+            }}
             className={cn("cursor-pointer justify-between", !selectedSandboxId && "bg-accent")}
           >
             <span className="text-muted-foreground">No Sandbox</span>
@@ -134,7 +136,9 @@ export function SandboxSelector() {
                   return (
                     <DropdownMenuItem
                       key={sandbox._id}
-                      onClick={() => setSelectedSandboxId(sandbox._id)}
+                      onClick={() => {
+                        setSelectedSandboxId(sandbox._id);
+                      }}
                       className={cn(
                         "cursor-pointer justify-between group",
                         isSelected && "bg-accent"

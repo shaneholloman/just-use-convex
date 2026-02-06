@@ -65,12 +65,30 @@ export type RunInBackgroundOptions = {
   initialLog?: string;
 };
 
+/** Result resolved by background task promises registered via waitUntil */
+export type BackgroundTaskWaitUntilResult = {
+  taskId: string;
+  status: BackgroundTaskStatus;
+  logs: BackgroundTaskLog[];
+  result?: unknown;
+  error?: string;
+};
+
 /** A tool or toolkit that can be passed to withBackgroundTaskTools */
 export type ToolOrToolkit = BaseTool | Toolkit;
 
 export class BackgroundTaskStore {
   private tasks = new Map<string, BackgroundTask>();
   private idCounter = 0;
+  private _waitUntil?: (promise: Promise<unknown>) => void;
+
+  setWaitUntil(waitUntil: (promise: Promise<unknown>) => void): void {
+    this._waitUntil = waitUntil;
+  }
+
+  get waitUntil(): ((promise: Promise<unknown>) => void) | undefined {
+    return this._waitUntil;
+  }
 
   generateId(): string {
     return `bg_${Date.now()}_${++this.idCounter}`;
@@ -207,7 +225,8 @@ async function executeWithTimeout<R>(
 
 /**
  * Runs a promise as a background task, tracking its progress and result.
- * Returns immediately with task info.
+ * Returns immediately with task info. The background promise is registered
+ * via waitUntil (if available on the store) and resolves with captured logs.
  */
 export function runInBackground({
   store,
@@ -225,14 +244,7 @@ export function runInBackground({
     store.addLog(task.id, { type: "info", message: initialLog });
   }
 
-  void (async () => {
-    const finalizeTask = (updates: Partial<BackgroundTask>) => {
-      store.update(task.id, {
-        ...updates,
-        completedAt: Date.now(),
-      });
-    };
-
+  const bgPromise = (async (): Promise<BackgroundTaskWaitUntilResult> => {
     try {
       const executionPromise = executionFactory(task.abortController?.signal);
       const result = await executeWithTimeout(
@@ -250,16 +262,33 @@ export function runInBackground({
         }
       }
 
-      finalizeTask({ status: "completed", result });
+      store.update(task.id, { status: "completed", result, completedAt: Date.now() });
+
+      return {
+        taskId: task.id,
+        status: "completed",
+        logs: store.get(task.id)?.logs ?? [],
+        result,
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       store.addLog(task.id, { type: "error", message: errorMessage });
-      finalizeTask({
-        status: error instanceof Error && error.name === "AbortError" ? "cancelled" : "failed",
+      const status: BackgroundTaskStatus =
+        error instanceof Error && error.name === "AbortError" ? "cancelled" : "failed";
+      store.update(task.id, { status, error: errorMessage, completedAt: Date.now() });
+
+      return {
+        taskId: task.id,
+        status,
+        logs: store.get(task.id)?.logs ?? [],
         error: errorMessage,
-      });
+      };
     }
   })();
+
+  if (store.waitUntil) {
+    store.waitUntil(bgPromise);
+  }
 
   return {
     backgroundTaskId: task.id,
