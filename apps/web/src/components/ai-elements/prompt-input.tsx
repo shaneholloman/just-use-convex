@@ -783,6 +783,10 @@ export const PromptInput = ({
       return;
     }
 
+    const filesToSubmit = files.filter(
+      (file) => !("uploadStatus" in file) || file.uploadStatus !== "error"
+    );
+
     const form = event.currentTarget;
     const text = usingProvider
       ? controller.textInput.value
@@ -849,7 +853,7 @@ export const PromptInput = ({
 
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
-      files.map(async ({ id, ...item }) => {
+      filesToSubmit.map(async ({ id, ...item }) => {
         if (item.url?.startsWith("blob:")) {
           const dataUrl = await convertBlobUrlToDataUrl(item.url);
           // If conversion failed, keep the original blob URL

@@ -82,7 +82,7 @@ function filterMessageParts(messages: UIMessage[], inputModalities?: string[]): 
 
 function sanitizeFilename(filename: string): string {
   const base = filename.split(/[\\/]/).pop() ?? "file";
-  const sanitized = base.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const sanitized = base.replace(/[\u0000-\u001F\u007F]/g, "_").trim();
   return sanitized.length > 0 ? sanitized : "file";
 }
 

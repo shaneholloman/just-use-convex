@@ -30,11 +30,15 @@ function buildCorsHeaders(request: Request): Record<string, string> {
     "http://localhost:3001",
     "http://127.0.0.1:3001",
   ].filter(Boolean) as string[];
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : "null";
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     Vary: "Origin",
   };
+
+  if (allowedOrigins.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+
+  return headers;
 }
