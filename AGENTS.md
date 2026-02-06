@@ -39,9 +39,8 @@ turbo dev          # Turborepo dev
 
 ### Type Checking
 ```
-# for eg: you made changes to the agent
-cd packages/agent && bunx tsc --noEmit
-# do not run bunx tsc --noEmit in the base dir
+// MANDATORY RUN at the end
+bun check-types
 ```
 ---
 
@@ -62,6 +61,7 @@ User uses casual language ("bro", "dawg", "ugh"). Keep responses terse and actio
 - **Use `useSyncExternalStore`** for shared mutable state
 - **Reference skills** when available (`emilkowal-animations`, `vercel-react-best-practices`)
 - **Use skeleton loaders**, not spinners
+- **Use GitHub CLI efficiently** — prefer `gh` subcommands over manual API calls, and reuse existing auth/config without re-authing
 - **Match Tailwind patterns exactly** — don't modify unrelated classes
 - **DRY the code** — reuse existing utilities
 - **Ask clarifying questions** if requirements are unclear
