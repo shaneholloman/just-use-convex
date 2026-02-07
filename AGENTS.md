@@ -171,6 +171,7 @@ File-based TanStack Router:
 - keep chat sandbox orchestration state in `apps/web/src/hooks/use-sandbox.ts`
 - keep `createChatSshAccess` and `createChatPreviewAccess` independent and lazily invoked from explicit user actions
 - use 2 minute sandbox access timeouts (SSH + preview URL) unless explicitly overridden
+- do not couple PTY terminal session lifecycle to SSH access `expiresInMinutes`
 - for Daytona sandbox backend code, avoid adding fallback/sanitization guardrails unless explicitly requested
 - chat sandbox is optional; when sandboxId is present, agent must assume sandbox already exists (no agent-side provisioning fallback)
 

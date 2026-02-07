@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { useOpenRouterModels, type OpenRouterModel } from "@/hooks/use-openrouter-models";
 import { ChatInput } from "@/components/chat";
 import {
@@ -37,9 +38,10 @@ function ChatLoadingSkeleton() {
 
 function ChatPage() {
   const { chatId } = Route.useParams();
+  const typedChatId = chatId as Id<"chats">;
   const { chat, agent, settings, setSettings, isReady } = useAgentInstance(chatId);
   const { groupedModels, models } = useOpenRouterModels();
-  const sandbox = useChatSandbox(chatId);
+  const sandbox = useChatSandbox(typedChatId);
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const selectedModel = useMemo(
@@ -170,8 +172,11 @@ function ChatPage() {
         <ResizablePanel defaultSize={75} minSize={25}>
           <ChatSandboxWorkspace
             sshSession={sandbox.sshSession}
+            previewPort={sandbox.previewPort}
             previewUrl={sandbox.previewUrl}
             isConnectingPreview={sandbox.isConnectingPreview}
+            onPreviewPortChange={sandbox.setPreviewPort}
+            onCreatePreviewAccess={sandbox.createPreviewAccess}
             onCopySshCommand={sandbox.copySshCommand}
             onOpenInEditor={sandbox.openInEditor}
             agent={agent}

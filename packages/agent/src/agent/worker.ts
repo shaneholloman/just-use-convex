@@ -338,7 +338,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
 
   @callable()
   async openSshTerminal(params?: {
-    expiresInMinutes?: number;
     cols?: number;
     rows?: number;
   }) {
@@ -351,7 +350,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       sandboxName: this.sandboxId,
       sessions: this.sshTerminalSessions,
       waitUntil: this.ctx.waitUntil.bind(this.ctx),
-      expiresInMinutes: params?.expiresInMinutes,
       cols: params?.cols,
       rows: params?.rows,
     });

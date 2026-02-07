@@ -47,7 +47,8 @@ export async function executeWithTimeout<R>(
       }
     }, timeoutMs);
 
-    Promise.resolve(fn())
+    Promise.resolve()
+      .then(() => fn())
       .then((result) => {
         if (!settled) {
           cleanup();

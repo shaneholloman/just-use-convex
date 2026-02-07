@@ -167,7 +167,12 @@ Important:
         return payload;
       }
 
-      const languageId = "typescript";
+      const lowerFilePath = file_path.toLowerCase();
+      const languageId = lowerFilePath.endsWith(".py")
+        ? "python"
+        : lowerFilePath.endsWith(".js") || lowerFilePath.endsWith(".jsx") || lowerFilePath.endsWith(".mjs")
+          ? "javascript"
+          : "typescript";
       const lspProjectPath = (project_path?.trim() || ".");
 
       try {

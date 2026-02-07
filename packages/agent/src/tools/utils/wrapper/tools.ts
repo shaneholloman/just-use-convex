@@ -79,9 +79,9 @@ Returns the task status, logs, and pagination info.`,
           }
 
           if (TERMINAL_STATUSES.includes(task.status)) {
-            const { logs } = store.getLogs(taskId, offset, limit);
+            const { logs, total, hasMore } = store.getLogs(taskId, offset, limit);
             const minimalLogs = logs.map(({ type, message }) => ({ type, message }));
-            return { ...buildTaskResult(task), logs: minimalLogs };
+            return { ...buildTaskResult(task), logs: minimalLogs, total, hasMore };
           }
 
           await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -99,9 +99,9 @@ Returns the task status, logs, and pagination info.`,
         return { error: `Task not found: ${taskId}` };
       }
 
-      const { logs } = store.getLogs(taskId, offset, limit);
+      const { logs, total, hasMore } = store.getLogs(taskId, offset, limit);
       const minimalLogs = logs.map(({ type, message }) => ({ type, message }));
-      return { ...buildTaskResult(task), logs: minimalLogs };
+      return { ...buildTaskResult(task), logs: minimalLogs, total, hasMore };
     },
   });
 

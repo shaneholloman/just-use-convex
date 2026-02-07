@@ -25,7 +25,6 @@ export type OpenSshTerminalParams = {
   sandboxName: string;
   sessions: SshTerminalSessions;
   waitUntil: (promise: Promise<unknown>) => void;
-  expiresInMinutes?: number;
   cols?: number;
   rows?: number;
 };
@@ -56,6 +55,26 @@ export type CloseSshTerminalParams = {
 
 export function createSshTerminalSessions(): SshTerminalSessions {
   return new Map<string, SshTerminalSession>();
+}
+
+async function closeSshTerminalSession(
+  sessions: SshTerminalSessions,
+  terminalId: string,
+  reason: string
+) {
+  const session = sessions.get(terminalId);
+  if (!session) {
+    return;
+  }
+  try {
+    await session.ptyHandle.kill();
+  } catch {
+    // ignore close errors
+  }
+  await session.ptyHandle.disconnect().catch(() => {});
+  await session.sandbox.process.killPtySession(terminalId).catch(() => {});
+  markTerminalClosed(sessions, terminalId, reason);
+  sessions.delete(terminalId);
 }
 
 function pushTerminalChunk(session: SshTerminalSession, data: string) {
@@ -162,7 +181,6 @@ export async function readSshTerminal({ sessions, terminalId, offset }: ReadSshT
       closeReason: "Terminal session not found",
     };
   }
-
   const safeOffset = Math.max(0, offset ?? 0);
   const dataParts = session.chunks
     .map((chunk) => {
@@ -194,7 +212,6 @@ export async function writeSshTerminal({ sessions, terminalId, data }: WriteSshT
   if (!session || session.closed) {
     throw new Error("Terminal session is not connected");
   }
-
   session.lastUsedAt = Date.now();
   await session.ptyHandle.sendInput(data);
   return { ok: true };
@@ -210,7 +227,6 @@ export async function resizeSshTerminal({
   if (!session || session.closed) {
     return { ok: false };
   }
-
   const safeCols = Math.max(20, Math.min(500, Math.floor(cols)));
   const safeRows = Math.max(5, Math.min(200, Math.floor(rows)));
   session.lastUsedAt = Date.now();
@@ -219,18 +235,6 @@ export async function resizeSshTerminal({
 }
 
 export async function closeSshTerminal({ sessions, terminalId }: CloseSshTerminalParams) {
-  const session = sessions.get(terminalId);
-  if (session) {
-    try {
-      await session.ptyHandle.kill();
-    } catch {
-      // ignore close errors
-    }
-    await session.ptyHandle.disconnect().catch(() => {});
-    await session.sandbox.process.killPtySession(terminalId).catch(() => {});
-  }
-
-  markTerminalClosed(sessions, terminalId, "Closed by client");
-  sessions.delete(terminalId);
+  await closeSshTerminalSession(sessions, terminalId, "Closed by client");
   return { ok: true };
 }

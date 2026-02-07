@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 type ChatSshSession = FunctionReturnType<typeof api.sandboxes.nodeFunctions.createChatSshAccess>;
 
-export function useChatSandbox(chatId: string) {
+export function useChatSandbox(chatId: Id<"chats">) {
   const createChatSshAccess = useAction(api.sandboxes.nodeFunctions.createChatSshAccess);
   const createChatPreviewAccess = useAction(api.sandboxes.nodeFunctions.createChatPreviewAccess);
   const [isOpen, setIsOpen] = useState(false);
@@ -61,7 +61,7 @@ export function useChatSandbox(chatId: string) {
   const createSshAccess = useCallback(
     async (expiresInMinutes?: number) => {
       return await createSshMutation.mutateAsync({
-        chatId: chatId as Id<"chats">,
+        chatId,
         expiresInMinutes,
       });
     },
@@ -74,7 +74,7 @@ export function useChatSandbox(chatId: string) {
     }
 
     const preview = await createPreviewMutation.mutateAsync({
-      chatId: chatId as Id<"chats">,
+      chatId,
       previewPort,
     });
     return preview;

@@ -222,7 +222,11 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
     }
   }
 
-  async write(filePath: string, content: string, encoding: BufferEncoding = "utf-8"): Promise<WriteResult> {
+  async write(
+    filePath: string,
+    content: string | Buffer,
+    encoding: BufferEncoding = "utf-8"
+  ): Promise<WriteResult> {
     try {
       return await this.withResolvedPath(filePath, async (sandbox, _rootDir, resolvedPath) => {
         const existing = await getFileDetailsOrNull(sandbox, resolvedPath);
@@ -235,7 +239,8 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
 
         const parentDir = getParentDir(resolvedPath);
         await ensureDirectory(sandbox, parentDir);
-        await sandbox.fs.uploadFile(Buffer.from(content, encoding), resolvedPath);
+        const buffer = typeof content === "string" ? Buffer.from(content, encoding) : content;
+        await sandbox.fs.uploadFile(buffer, resolvedPath);
 
         const fileData = await this.readRaw(filePath);
 
@@ -487,10 +492,9 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
 
         try {
           if (url.startsWith("data:")) {
-            const base64Match = url.match(/^data:[^;]+;base64,(.+)$/);
+            const base64Match = url.match(/^data:[^,]*;base64,(.+)$/i);
             if (base64Match?.[1]) {
-              const binaryContent = atob(base64Match[1]);
-              await this.write(filePath, binaryContent, "binary");
+              await this.write(filePath, Buffer.from(base64Match[1], "base64"));
               continue;
             }
           }

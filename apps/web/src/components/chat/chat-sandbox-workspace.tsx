@@ -20,8 +20,11 @@ type XtermTerminalResizeEvent = Parameters<Parameters<XtermTerminal["onResize"]>
 
 type ChatSandboxWorkspaceProps = {
   sshSession: ChatSshSessionState;
+  previewPort: number | undefined;
   previewUrl: string | undefined;
   isConnectingPreview: boolean;
+  onPreviewPortChange: (port: number | undefined) => void;
+  onCreatePreviewAccess: () => Promise<unknown>;
   onCopySshCommand: () => Promise<void>;
   onOpenInEditor: (editor: "vscode" | "cursor") => Promise<void>;
   agent: {
@@ -31,8 +34,11 @@ type ChatSandboxWorkspaceProps = {
 
 export function ChatSandboxWorkspace({
   sshSession,
+  previewPort,
   previewUrl,
   isConnectingPreview,
+  onPreviewPortChange,
+  onCreatePreviewAccess,
   onCopySshCommand,
   onOpenInEditor,
   agent,
@@ -291,15 +297,28 @@ export function ChatSandboxWorkspace({
         <TabsContent value="preview" className="mt-0 flex min-h-0 flex-1 flex-col p-3">
           <div className="mb-2 flex items-center gap-2">
             <Input
-              value={previewUrl ?? ""}
-              readOnly
-              placeholder="https://..."
+              type="number"
+              min={1}
+              max={65535}
+              value={previewPort ?? ""}
+              onChange={(event) => {
+                const nextPort = Number(event.target.value);
+                onPreviewPortChange(Number.isFinite(nextPort) && nextPort > 0 ? nextPort : undefined);
+              }}
+              placeholder="3000"
               className="h-8"
             />
-            <Button type="button" size="sm" variant="outline" disabled>
-              {isConnectingPreview ? "Connecting..." : "Set Port First"}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void onCreatePreviewAccess()}
+              disabled={previewPort === undefined || isConnectingPreview}
+            >
+              {isConnectingPreview ? "Connecting..." : "Connect"}
             </Button>
           </div>
+          <Input value={previewUrl ?? ""} readOnly placeholder="https://..." className="mb-2 h-8" />
           <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
             <iframe
               className="h-full w-full"
@@ -344,10 +363,7 @@ export function ChatSandboxWorkspace({
               <ul className="p-1">
                 {sortedEntries.map((entry) => (
                   <li key={entry.path}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
-                    >
+                    <div className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs">
                       <span className="flex min-w-0 items-center gap-2">
                         {entry.isDir ? (
                           <FolderIcon className="size-3.5 shrink-0 text-blue-500" />
@@ -357,7 +373,7 @@ export function ChatSandboxWorkspace({
                         <span className="truncate">{entry.name}</span>
                       </span>
                       {!entry.isDir && <ExternalLink className="size-3 text-muted-foreground" />}
-                    </button>
+                    </div>
                   </li>
                 ))}
               </ul>

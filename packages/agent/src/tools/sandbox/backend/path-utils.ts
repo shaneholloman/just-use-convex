@@ -37,11 +37,12 @@ export function joinPath(basePath: string, childName: string): string {
 }
 
 export function getParentDir(path: string): string {
-  const index = path.lastIndexOf("/");
+  const normalizedPath = path.endsWith("/") && path !== "/" ? path.replace(/\/+$/, "") : path;
+  const index = normalizedPath.lastIndexOf("/");
   if (index <= 0) {
     return "/";
   }
-  return path.slice(0, index) || "/";
+  return normalizedPath.slice(0, index) || "/";
 }
 
 export function escapeRegex(value: string): string {

@@ -79,11 +79,6 @@ function buildExecutionOptions(
       ...opts.toolContext,
       abortSignal: abortController.signal,
     };
-  } else if (executionOpts.toolContext) {
-    executionOpts.toolContext = {
-      ...executionOpts.toolContext,
-      abortSignal: abortController.signal,
-    };
   }
 
   return executionOpts;
