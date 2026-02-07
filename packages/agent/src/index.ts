@@ -115,6 +115,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     return `m_${hash}`;
   }
 
+  private getVectorNamespace(): string | undefined {
+    return this.chatDoc?.memberId;
+  }
+
   private async saveFilesToSandbox(messages: UIMessage[]): Promise<void> {
     if (!this.sandboxBackend) return;
 
@@ -182,6 +186,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       vectors.push({
         id,
         values,
+        namespace: this.getVectorNamespace(),
         metadata: meta,
       });
     }
@@ -230,12 +235,15 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const vectorize = this.env.VECTORIZE_CHAT_MESSAGES;
     if (!vectorize) return null;
 
-    const [embedding] = await embedTexts([queryText]);
+    const normalizedQuery = queryText.trim();
+    if (!normalizedQuery) return null;
+
+    const [embedding] = await embedTexts([normalizedQuery]);
     if (!embedding) return null;
 
     return vectorize.query(embedding, {
       topK,
-      namespace: this.chatDoc?.memberId,
+      namespace: this.getVectorNamespace(),
       returnMetadata: "all",
     });
   }

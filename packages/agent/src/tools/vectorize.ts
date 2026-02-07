@@ -4,17 +4,7 @@ import { z } from "zod";
 export function createVectorizeToolkit({
   queryVectorize,
 }: {
-  queryVectorize: (query: string, topK?: number) => Promise<{
-    matches: Array<{
-      score?: number;
-      metadata?: {
-        role?: unknown;
-        text?: unknown;
-        messageId?: unknown;
-        chatId?: unknown;
-      };
-    }>;
-  } | null>;
+  queryVectorize: (query: string, topK?: number) => Promise<VectorizeMatches | null>;
 }) {
   const vectorizeSearchTool = createTool({
     name: "vectorize_search",
@@ -31,14 +21,17 @@ Results return matching message snippets with scores and metadata.`,
       topK: z.number().min(1).max(20).optional().describe("Number of matches to return (1-20). Default: 6"),
     }),
     execute: async ({ query, topK = 6 }) => {
-      if (!query.trim()) {
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) {
         return { error: true, message: "Query is required and cannot be empty." };
       }
 
-      const results = await queryVectorize(query, topK);
+      const results = await queryVectorize(normalizedQuery, topK);
       if (!results) {
         return {
-          query,
+          query: normalizedQuery,
+          topK,
+          numMatches: 0,
           matches: [],
           message: "Vectorize is not configured or no embedding could be created.",
         };
@@ -53,8 +46,9 @@ Results return matching message snippets with scores and metadata.`,
       }));
 
       return {
-        query,
-        topK: matches.length,
+        query: normalizedQuery,
+        topK,
+        numMatches: matches.length,
         matches,
       };
     },
