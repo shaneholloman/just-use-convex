@@ -1,12 +1,6 @@
 import type { TokenConfig } from "@just-use-convex/backend/convex/lib/convexAdapter";
 
-export type ChatState = {
-  model: string;
-  reasoningEffort?: "low" | "medium" | "high";
-  inputModalities?: string[];
-};
-
-export type InitArgs = {
+export type AgentArgs = {
   model?: string;
   reasoningEffort?: "low" | "medium" | "high";
   inputModalities?: string[];

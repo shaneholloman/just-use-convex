@@ -38,14 +38,14 @@ import {
 } from "../tools/utils/wrapper";
 import { generateTitle } from "./chat-meta";
 import { extractMessageText, filterMessageParts } from "./messages";
-import type { ChatState, InitArgs } from "./types";
+import type { AgentArgs } from "./types";
 import {
   buildRetrievalMessage,
   deleteMessageVectors,
   indexMessagesInVectorStore,
 } from "./vectorize";
 
-export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
+export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
   private convexAdapter: ConvexAdapter | null = null;
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
@@ -53,34 +53,40 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
   private backgroundTaskStore = new BackgroundTaskStore();
   private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
 
-  private async _init(args?: InitArgs): Promise<void> {
+  private async _init(args?: AgentArgs): Promise<void> {
     if (args) {
       await this.ctx.storage.put("initArgs", args);
     }
-    const initArgs = (args ?? (await this.ctx.storage.get("initArgs"))) as InitArgs | null;
+    const initArgs = (args ?? (await this.ctx.storage.get("initArgs"))) as AgentArgs | null;
     if (!initArgs) {
       throw new Error("Agent not initialized: missing initArgs");
     }
     const { model, reasoningEffort, inputModalities, tokenConfig } = initArgs;
     const state = this.state ?? {};
-    if (
-      (!state.model && model) ||
-      (!state.reasoningEffort && reasoningEffort) ||
-      (!state.inputModalities && inputModalities)
-    ) {
+    const shouldSyncState = Boolean(
+      (model && state.model !== model) ||
+      (reasoningEffort && state.reasoningEffort !== reasoningEffort) ||
+      (inputModalities &&
+        JSON.stringify(state.inputModalities) !== JSON.stringify(inputModalities)) ||
+      (tokenConfig &&
+        JSON.stringify(state.tokenConfig) !== JSON.stringify(tokenConfig))
+    );
+    if (shouldSyncState) {
       this.setState({
         ...state,
         ...(model && { model }),
         ...(reasoningEffort && { reasoningEffort }),
         ...(inputModalities && { inputModalities }),
+        ...(tokenConfig && { tokenConfig }),
       });
     }
 
     if (!this.convexAdapter) {
-      if (!tokenConfig) {
+      const activeTokenConfig = tokenConfig ?? this.state?.tokenConfig;
+      if (!activeTokenConfig) {
         throw new Error("Unauthorized: No token provided");
       }
-      this.convexAdapter = await createConvexAdapter(this.env.CONVEX_URL, tokenConfig);
+      this.convexAdapter = await createConvexAdapter(this.env.CONVEX_URL, activeTokenConfig);
 
       const getFn = this.convexAdapter.getTokenType() === "ext"
         ? api.chats.index.getExt
@@ -97,12 +103,13 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
       }
     }
 
-    if (model || reasoningEffort || inputModalities) {
+    if (model || reasoningEffort || inputModalities || tokenConfig) {
       await this.ctx.storage.put("chatState", {
         model: model ?? this.state?.model,
         reasoningEffort: reasoningEffort ?? this.state?.reasoningEffort,
         inputModalities: inputModalities ?? this.state?.inputModalities,
-      } satisfies ChatState);
+        tokenConfig: tokenConfig ?? this.state?.tokenConfig,
+      } satisfies AgentArgs);
     }
   }
 
@@ -130,7 +137,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
         new Agent({
           name: toolkit.name,
           purpose: toolkit.description,
-          model: createAiClient(this.state.model, this.state.reasoningEffort),
+          model: createAiClient(this.state.model!, this.state.reasoningEffort),
           instructions: toolkit.instructions ?? '',
           tools: toolkit.tools,
         })
@@ -140,7 +147,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const agent = new PlanAgent({
       name: "Assistant",
       systemPrompt: SYSTEM_PROMPT,
-      model: createAiClient(this.state.model, this.state.reasoningEffort),
+      model: createAiClient(this.state.model!, this.state.reasoningEffort),
       tools: withBackgroundTaskTools([
         createWebSearchToolkit(),
         createAskUserToolkit(),
@@ -227,7 +234,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     for (const subagent of subagents) {
       if (subagent && typeof subagent === "object" && "model" in subagent) {
         Object.defineProperty(subagent, "model", {
-          value: createAiClient(this.state.model, this.state.reasoningEffort),
+          value: createAiClient(this.state.model!, this.state.reasoningEffort),
           writable: true,
           configurable: true,
         });
@@ -238,7 +245,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     const reasoningEffort = this.state.reasoningEffort;
 
     Object.defineProperty(agent, "model", {
-      value: createAiClient(model, reasoningEffort),
+      value: createAiClient(model!, reasoningEffort),
       writable: true,
       configurable: true,
     });
@@ -269,7 +276,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, ChatState> {
     return await super.onConnect(connection, ctx);
   }
 
-  override async onStateUpdate(state: ChatState, source: Connection | "server"): Promise<void> {
+  override async onStateUpdate(state: AgentArgs, source: Connection | "server"): Promise<void> {
     await this._patchAgent();
     await this.ctx.storage.put("chatState", state);
     await super.onStateUpdate(state, source);
