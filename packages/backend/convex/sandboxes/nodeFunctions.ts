@@ -134,7 +134,8 @@ async function createChatSshAccessFunction(ctx: zActionCtx, args: z.infer<typeof
   const daytona = getDaytonaClient();
   const sandbox = await daytona.get(chat.sandboxId);
   await sandbox.start();
-  const expiresInMinutes = args.expiresInMinutes ?? 60;
+  await sandbox.waitUntilStarted();
+  const expiresInMinutes = args.expiresInMinutes ?? 2;
 
   const [sshAccess, workdir] = await Promise.all([
     sandbox.createSshAccess(expiresInMinutes),
@@ -189,8 +190,12 @@ async function createChatPreviewAccessFunction(ctx: zActionCtx, args: z.infer<ty
   const daytona = getDaytonaClient();
   const sandbox = await daytona.get(chat.sandboxId);
   await sandbox.start();
+  await sandbox.waitUntilStarted();
 
-  const previewLink = await sandbox.getPreviewLink(args.previewPort);
+  const [previewLink, signedPreviewLink] = await Promise.all([
+    sandbox.getPreviewLink(args.previewPort),
+    sandbox.getSignedPreviewUrl(args.previewPort, 60 * 2),
+  ]);
 
   return {
     chatId: chat._id,
@@ -198,7 +203,7 @@ async function createChatPreviewAccessFunction(ctx: zActionCtx, args: z.infer<ty
     sandboxName: chat.sandbox?.name ?? chat.sandboxId,
     preview: {
       port: args.previewPort,
-      url: previewLink.url,
+      url: signedPreviewLink.url,
       token: previewLink.token ?? null,
     },
   };

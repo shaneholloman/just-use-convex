@@ -39,7 +39,6 @@ export interface MessageItemProps {
   message: UIMessage;
   isStreaming: boolean;
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
-  isCompact?: boolean;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
   isLastAssistantMessage?: boolean;
@@ -65,7 +64,6 @@ export const MessageItem = memo(function MessageItem({
   message,
   isStreaming,
   toolApprovalResponse,
-  isCompact = false,
   onRegenerate,
   onEditMessage,
   isLastAssistantMessage,
@@ -76,7 +74,7 @@ export const MessageItem = memo(function MessageItem({
   const messageText = extractMessageText(message);
   const messageFiles = extractMessageFiles(message);
   const sources = useMemo(() => extractSourcesFromMessage(message), [message]);
-  const containerClassName = isCompact ? "w-full px-3" : "mx-auto w-4xl px-4";
+  const containerClassName = "w-full px-3 @xl/chat-column:mx-auto @xl/chat-column:w-4xl @xl/chat-column:px-4";
 
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
@@ -284,10 +282,6 @@ export const MessageItem = memo(function MessageItem({
     </Message>
   );
 }, (prev, next) => {
-  if (prev.isCompact !== next.isCompact) {
-    return false;
-  }
-
   // For completed messages (not streaming), skip re-render if ID matches
   if (!prev.isStreaming && !next.isStreaming) {
     if (prev.message.id !== next.message.id) return false;

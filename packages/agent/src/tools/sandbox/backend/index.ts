@@ -515,6 +515,7 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
   async exec(command: string, options?: {
     timeout?: number;
     cwd?: string;
+    terminalId?: string;
     abortSignal?: AbortSignal;
     streamLogs?: (entry: { type: "stdout" | "stderr" | "info" | "error"; message: string }) => void;
   }): Promise<{
@@ -522,9 +523,10 @@ export class SandboxFilesystemBackend implements FilesystemBackend {
     stdout: string;
     stderr: string;
     exitCode: number;
+    terminalId?: string;
   }> {
     return this.withSandboxContext(async (sandbox, rootDir) => {
-      return runSandboxCommand(sandbox, command, rootDir, resolvePath, options);
+      return runSandboxCommand(sandbox, this.sandboxName, command, rootDir, resolvePath, options);
     });
   }
 }

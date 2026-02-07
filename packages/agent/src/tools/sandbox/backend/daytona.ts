@@ -2,9 +2,15 @@ import { Daytona } from "@daytonaio/sdk";
 import type { worker } from "../../../../alchemy.run";
 
 export const LSP_IDLE_TTL_MS = 10 * 60 * 1000;
+export const TERMINAL_IDLE_TTL_MS = 10 * 60 * 1000;
 
 export type SandboxInstance = Awaited<ReturnType<Daytona["get"]>>;
 export type LspServer = Awaited<ReturnType<SandboxInstance["createLspServer"]>>;
+export type TerminalSessionState = {
+  lastUsedAt: number;
+  activeCommands: number;
+  queue: Promise<void>;
+};
 
 const daytonaState = {
   daytonaClient: null as Daytona | null,
@@ -19,6 +25,7 @@ const daytonaState = {
       }
     >
   >(),
+  terminalBySandbox: new Map<string, Map<string, TerminalSessionState>>(),
 };
 
 export function getDaytonaClient(env: typeof worker.Env): Daytona {
@@ -70,5 +77,16 @@ export function getLspCache(sandboxName: string) {
     }
   >();
   daytonaState.lspServerBySandbox.set(sandboxName, created);
+  return created;
+}
+
+export function getTerminalCache(sandboxName: string) {
+  const cached = daytonaState.terminalBySandbox.get(sandboxName);
+  if (cached) {
+    return cached;
+  }
+
+  const created = new Map<string, TerminalSessionState>();
+  daytonaState.terminalBySandbox.set(sandboxName, created);
   return created;
 }

@@ -42,7 +42,15 @@ turbo dev          # Turborepo dev
 // MANDATORY RUN at the end
 bun check-types
 ```
----
+
+### On Finish
+
+Always play `finish.mp3` when done working to notify me. This is mandatory before your final response.
+Run from repo root and do not skip silently on failure.
+```bash
+test -f finish.mp3 && paplay finish.mp3
+```
+If playback fails, explicitly report that in the final response with the command error.
 
 ## Communication Style
 
@@ -159,6 +167,10 @@ File-based TanStack Router:
 - always use convex ents for convex related stuff
 - whenever implementing something for convex, analyze adjecent and relevant files for similar pattern implementation
 - whenever working with external libraries always query context7 for their relevant docs
+- prefer container-query driven chat layout over `isCompact`-style state props
+- keep chat sandbox orchestration state in `apps/web/src/hooks/use-sandbox.ts`
+- keep `createChatSshAccess` and `createChatPreviewAccess` independent and lazily invoked from explicit user actions
+- use 2 minute sandbox access timeouts (SSH + preview URL) unless explicitly overridden
 - for Daytona sandbox backend code, avoid adding fallback/sanitization guardrails unless explicitly requested
 - chat sandbox is optional; when sandboxId is present, agent must assume sandbox already exists (no agent-side provisioning fallback)
 

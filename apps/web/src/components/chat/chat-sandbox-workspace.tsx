@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ExternalLink, FileIcon, FolderIcon, LaptopIcon, Loader2, RefreshCw } from "lucide-react";
-import { api } from "@just-use-convex/backend/convex/_generated/api";
-import type { FunctionReturnType } from "convex/server";
+import { ExternalLink, FileIcon, FolderIcon, LaptopIcon, RefreshCw } from "lucide-react";
 import type { Terminal as XtermTerminal } from "xterm";
+import type { ChatSshSessionState } from "@/hooks/use-sandbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
@@ -16,79 +14,51 @@ import {
 } from "@/components/ui/dropdown-menu";
 import "xterm/css/xterm.css";
 
-type SandboxWorkspaceSession = FunctionReturnType<typeof api.sandboxes.nodeFunctions.createChatSshAccess> &
-  Pick<FunctionReturnType<typeof api.sandboxes.nodeFunctions.createChatPreviewAccess>, "preview">;
 type XtermTerminalWriteData = Extract<Parameters<XtermTerminal["write"]>[0], string>;
 type XtermTerminalInputData = Extract<Parameters<Parameters<XtermTerminal["onData"]>[0]>[0], string>;
 type XtermTerminalResizeEvent = Parameters<Parameters<XtermTerminal["onResize"]>[0]>[0];
 
 type ChatSandboxWorkspaceProps = {
-  session: SandboxWorkspaceSession | null;
-  isLoading: boolean;
-  onReconnect: () => Promise<void>;
+  sshSession: ChatSshSessionState;
+  previewUrl: string | undefined;
+  isConnectingPreview: boolean;
+  onCopySshCommand: () => Promise<void>;
+  onOpenInEditor: (editor: "vscode" | "cursor") => Promise<void>;
   agent: {
     call: (method: string, args?: unknown[]) => Promise<unknown>;
   } | null;
 };
 
-export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }: ChatSandboxWorkspaceProps) {
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewDraft, setPreviewDraft] = useState("");
+export function ChatSandboxWorkspace({
+  sshSession,
+  previewUrl,
+  isConnectingPreview,
+  onCopySshCommand,
+  onOpenInEditor,
+  agent,
+}: ChatSandboxWorkspaceProps) {
+  const [activeTab, setActiveTab] = useState<"preview" | "terminal" | "explorer">("preview");
   const [terminalReloadKey, setTerminalReloadKey] = useState(0);
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
+  const terminalRef = useRef<XtermTerminal | null>(null);
   const terminalIdRef = useRef<string | null>(null);
   const terminalCursorRef = useRef(0);
   const terminalInputBufferRef = useRef<XtermTerminalInputData>("");
   const terminalWriteInFlightRef = useRef(false);
   const terminalWriteErroredRef = useRef(false);
 
-  useEffect(() => {
-    const nextUrl = session?.preview.url ?? "";
-    setPreviewUrl(nextUrl);
-    setPreviewDraft(nextUrl);
-  }, [session?.preview.url]);
-
   const sortedEntries = useMemo(() => {
-    const entries = session?.explorer.entries ?? [];
+    const entries = sshSession?.explorer.entries ?? [];
     return [...entries].sort((a, b) => {
       if (a.isDir !== b.isDir) {
         return a.isDir ? -1 : 1;
       }
       return a.name.localeCompare(b.name);
     });
-  }, [session?.explorer.entries]);
-
-  const copyCommand = useCallback(async () => {
-    if (!session?.ssh.command) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(session.ssh.command);
-      toast.success("SSH command copied");
-    } catch {
-      toast.error("Failed to copy SSH command");
-    }
-  }, [session?.ssh.command]);
-
-  const openInEditor = useCallback(
-    async (editor: "vscode" | "cursor") => {
-      if (!session?.ssh.command) {
-        return;
-      }
-
-      await copyCommand();
-
-      if (typeof window === "undefined") {
-        return;
-      }
-
-      window.location.href = editor === "vscode" ? "vscode://" : "cursor://";
-    },
-    [copyCommand, session?.ssh.command]
-  );
+  }, [sshSession?.explorer.entries]);
 
   useEffect(() => {
-    if (!session || !agent || !terminalContainerRef.current) {
+    if (!agent || !terminalContainerRef.current) {
       return;
     }
 
@@ -123,7 +93,17 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
       term.loadAddon(fitAddon);
       term.open(terminalContainerRef.current);
       fitAddon.fit();
+      term.focus();
       term.writeln("Connecting to sandbox shell through agent proxy...");
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.type === "keydown" && event.key === "Tab") {
+          event.preventDefault();
+          event.stopPropagation();
+          return true;
+        }
+        return true;
+      });
+      terminalRef.current = term;
 
       terminalDispose = () => {
         term.dispose();
@@ -254,31 +234,24 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
         void agent.call("closeSshTerminal", [{ terminalId }]).catch(() => undefined);
       }
 
+      terminalRef.current = null;
       terminalDispose?.();
     };
-  }, [agent, session, terminalReloadKey]);
+  }, [agent, terminalReloadKey]);
 
-  if (isLoading && !session) {
-    return (
-      <div className="flex h-full flex-col border-l bg-background p-3">
-        <Skeleton className="mb-3 h-8 w-64" />
-        <Skeleton className="mb-3 h-10 w-full" />
-        <Skeleton className="h-full w-full" />
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="flex h-full items-center justify-center border-l bg-background p-4">
-        <p className="text-sm text-muted-foreground">Connect sandbox to start preview, terminal, and file explorer.</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (activeTab === "terminal") {
+      terminalRef.current?.focus();
+    }
+  }, [activeTab]);
 
   return (
     <div className="h-full border-l bg-background">
-      <Tabs defaultValue="preview" className="flex h-full flex-col gap-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as "preview" | "terminal" | "explorer")}
+        className="flex h-full flex-col gap-0"
+      >
         <div className="flex items-center justify-between border-b px-2 py-1.5">
           <TabsList variant="line" className="w-auto">
             <TabsTrigger value="preview">Preview</TabsTrigger>
@@ -290,11 +263,10 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
               type="button"
               variant="ghost"
               size="icon-sm"
-              onClick={() => void onReconnect()}
-              disabled={isLoading}
-              aria-label="Reconnect SSH session"
+              onClick={() => setTerminalReloadKey((value) => value + 1)}
+              aria-label="Reconnect terminal session"
             >
-              {isLoading ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+              <RefreshCw className="size-3" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -305,10 +277,10 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
                 }
               />
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => void openInEditor("vscode")}>
+                <DropdownMenuItem onClick={() => void onOpenInEditor("vscode")}>
                   Open in VSCode
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void openInEditor("cursor")}>
+                <DropdownMenuItem onClick={() => void onOpenInEditor("cursor")}>
                   Open in Cursor
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -319,18 +291,13 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
         <TabsContent value="preview" className="mt-0 flex min-h-0 flex-1 flex-col p-3">
           <div className="mb-2 flex items-center gap-2">
             <Input
-              value={previewDraft}
-              onChange={(event) => setPreviewDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  setPreviewUrl(previewDraft.trim());
-                }
-              }}
+              value={previewUrl ?? ""}
+              readOnly
               placeholder="https://..."
               className="h-8"
             />
-            <Button type="button" size="sm" variant="outline" onClick={() => setPreviewUrl(previewDraft.trim())}>
-              Open
+            <Button type="button" size="sm" variant="outline" disabled>
+              {isConnectingPreview ? "Connecting..." : "Set Port First"}
             </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
@@ -343,9 +310,9 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
           </div>
         </TabsContent>
 
-        <TabsContent value="terminal" className="mt-0 flex min-h-0 flex-1 flex-col p-3">
+        <TabsContent value="terminal" keepMounted className="mt-0 flex min-h-0 flex-1 flex-col p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-medium">{session.sandboxName}</p>
+            <p className="text-sm font-medium">Sandbox terminal</p>
             <div className="flex items-center gap-1">
               <Button
                 type="button"
@@ -355,19 +322,21 @@ export function ChatSandboxWorkspace({ session, isLoading, onReconnect, agent }:
               >
                 Reload
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => void copyCommand()}>
+              <Button type="button" variant="outline" size="sm" onClick={() => void onCopySshCommand()}>
                 Copy SSH
               </Button>
             </div>
           </div>
           <div ref={terminalContainerRef} className="min-h-0 flex-1 overflow-hidden rounded-md border bg-black" />
-          <div className="mt-2 text-xs text-muted-foreground">
-            SSH expires: {new Date(session.ssh.expiresAt).toLocaleString()}
-          </div>
+          {sshSession && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              SSH expires: {new Date(sshSession.ssh.expiresAt).toLocaleString()}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="explorer" className="mt-0 min-h-0 flex-1 p-3">
-          <div className="mb-2 text-xs text-muted-foreground">{session.explorer.path}</div>
+          <div className="mb-2 text-xs text-muted-foreground">{sshSession?.explorer.path ?? "/"}</div>
           <div className="h-full overflow-auto rounded-md border">
             {sortedEntries.length === 0 ? (
               <div className="p-3 text-sm text-muted-foreground">No files found.</div>

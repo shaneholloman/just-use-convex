@@ -31,10 +31,12 @@ Important:
 - Commands have a default timeout of 5 minutes, then auto-convert to background task
 - For known long-running commands, use the background option to run asynchronously from the start
 - Use absolute paths or paths relative to the sandbox workdir
+- Reuse terminal_id when you need persistent shell state across multiple commands
 - If output exceeds ${maxOutputChars} characters, it will be written to a log file that you can explore using grep or read tools`,
     parameters: z.object({
       command: z.string().describe("The bash command to execute"),
       cwd: z.string().optional().describe("Working directory for the command (default: sandbox workdir)"),
+      terminal_id: z.string().optional().describe("Optional terminal ID to reuse the same PTY session across multiple bash calls"),
     }),
     store,
     toolCallConfig: {
@@ -45,8 +47,10 @@ Important:
     execute: async (args, wrappedOptions?: WrappedExecuteOptions) => {
       const command = args.command as string;
       const cwd = args.cwd as string | undefined;
+      const terminalId = args.terminal_id as string | undefined;
       const result = await backend.exec(command, {
         cwd,
+        terminalId,
         timeout: wrappedOptions?.timeout,
         abortSignal: wrappedOptions?.toolContext?.abortSignal ?? wrappedOptions?.abortController?.signal,
         streamLogs: wrappedOptions?.streamLogs ?? wrappedOptions?.log,
@@ -86,6 +90,7 @@ Important:
           output: truncatedOutput,
           exitCode: result.exitCode,
           truncated: true,
+          ...(result.terminalId ? { terminal_id: result.terminalId } : {}),
           logFile,
           message: `Output truncated (showing ${truncatedLineCount} of ${lineCount} lines, ${maxOutputChars} of ${fullOutput.length} chars). Full output saved to: ${logFile}. Use grep or read tools to explore the log file.`,
         };
@@ -104,6 +109,7 @@ Important:
         output: fullOutput,
         exitCode: result.exitCode,
         truncated: false,
+        ...(result.terminalId ? { terminal_id: result.terminalId } : {}),
       };
 
       if (!result.success) {
@@ -323,6 +329,7 @@ You can execute code in isolated Daytona sandboxes. This provides a secure envir
 Sandbox guidelines:
 - Use sandboxes for any code that needs to run, not just for viewing
 - Prefer streaming output for long-running commands to provide real-time feedback
+- Reuse terminal_id for stateful terminal workflows that span multiple commands
 - Use bash when an operation is not covered by dedicated filesystem/LSP tools
 - Clean up resources when done (delete files, stop processes)
 - Handle command failures gracefully and report errors clearly

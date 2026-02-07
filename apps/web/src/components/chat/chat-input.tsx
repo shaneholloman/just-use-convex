@@ -44,7 +44,6 @@ export type ChatInputProps = {
   onSandboxToggle?: () => void;
   isSandboxPanelOpen?: boolean;
   isSandboxConnecting?: boolean;
-  isCompact?: boolean;
 };
 
 export const ChatInput = memo(function ChatInput({
@@ -60,7 +59,6 @@ export const ChatInput = memo(function ChatInput({
   onSandboxToggle,
   isSandboxPanelOpen = false,
   isSandboxConnecting = false,
-  isCompact = false,
 }: ChatInputProps) {
   const supportsReasoning = selectedModel?.supports_reasoning ?? false;
   const setDefaultSettings = useSetAtom(defaultChatSettingsAtom);
@@ -77,7 +75,7 @@ export const ChatInput = memo(function ChatInput({
   );
 
   return (
-    <div className={isCompact ? "w-full px-3 pb-1" : "pb-1 mx-auto w-4xl"}>
+    <div className="w-full px-3 pb-1 @xl/chat-column:mx-auto @xl/chat-column:w-4xl @xl/chat-column:px-0">
       <PromptInput
         onSubmit={onSubmit}
         multiple
@@ -106,7 +104,6 @@ export const ChatInput = memo(function ChatInput({
           <div className="flex items-center gap-1">
             {onSandboxToggle && (
               <PromptInputButton
-                size="icon-xs"
                 variant={isSandboxPanelOpen ? "outline" : "ghost"}
                 onClick={onSandboxToggle}
                 disabled={isSandboxConnecting}
@@ -131,8 +128,8 @@ function AttachmentButton() {
   const attachments = usePromptInputAttachments();
 
   return (
-    <PromptInputButton onClick={() => attachments.openFileDialog()} size="icon-xs">
-      <PaperclipIcon className="size-4" />
+    <PromptInputButton onClick={() => attachments.openFileDialog()}>
+      <PaperclipIcon />
     </PromptInputButton>
   );
 }

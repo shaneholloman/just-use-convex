@@ -18,7 +18,7 @@ interface MessageListProps {
   messages: UIMessage[];
   isStreaming: boolean;
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
-  isCompact?: boolean;
+  headerHeight?: number;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
   onTodosChange?: (todosState: TodosState) => void;
@@ -29,7 +29,7 @@ export function MessageList({
   messages,
   isStreaming,
   toolApprovalResponse,
-  isCompact = false,
+  headerHeight = 0,
   onRegenerate,
   onEditMessage,
   onTodosChange,
@@ -57,8 +57,10 @@ export function MessageList({
     syncAskUserToParent(onAskUserChange);
   });
 
+  const messageListPaddingTop = messages.length > 0 ? headerHeight : 0;
+
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1" style={{ paddingTop: messageListPaddingTop }}>
       {messages.map((message, index) => {
         const userMessageId =
           message.role === "assistant"
@@ -71,7 +73,6 @@ export function MessageList({
             message={message}
             isStreaming={isStreaming && index === messages.length - 1}
             toolApprovalResponse={toolApprovalResponse}
-            isCompact={isCompact}
             onRegenerate={onRegenerate}
             onEditMessage={onEditMessage}
             isLastAssistantMessage={index === lastAssistantMessageIndex}

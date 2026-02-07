@@ -28,6 +28,14 @@ import type { worker } from "../../alchemy.run";
 import { createAiClient } from "../client";
 import { SYSTEM_PROMPT, TASK_PROMPT } from "../prompt";
 import { createAskUserToolkit } from "../tools/ask-user";
+import {
+  closeSshTerminal as closeSshTerminalSession,
+  createSshTerminalSessions,
+  openSshTerminal as openSshTerminalSession,
+  readSshTerminal as readSshTerminalSession,
+  resizeSshTerminal as resizeSshTerminalSession,
+  writeSshTerminal as writeSshTerminalSession,
+} from "../tools/sandbox/backend/terminal";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "../tools/sandbox";
 import { createWebSearchToolkit } from "../tools/websearch";
 import { parseStreamToUI } from "../utils/fullStreamParser";
@@ -52,6 +60,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
   private sandboxBackend: SandboxFilesystemBackend | null = null;
   private backgroundTaskStore = new BackgroundTaskStore();
   private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
+  private sshTerminalSessions = createSshTerminalSessions();
 
   private async _init(args?: AgentArgs): Promise<void> {
     if (args) {
@@ -325,6 +334,63 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     }
 
     await this.persistMessages(messages);
+  }
+
+  @callable()
+  async openSshTerminal(params?: {
+    expiresInMinutes?: number;
+    cols?: number;
+    rows?: number;
+  }) {
+    await this._init();
+    if (!this.sandboxId) {
+      throw new Error("This chat does not have a sandbox attached");
+    }
+    return openSshTerminalSession({
+      env: this.env,
+      sandboxName: this.sandboxId,
+      sessions: this.sshTerminalSessions,
+      waitUntil: this.ctx.waitUntil.bind(this.ctx),
+      expiresInMinutes: params?.expiresInMinutes,
+      cols: params?.cols,
+      rows: params?.rows,
+    });
+  }
+
+  @callable()
+  async readSshTerminal(params: { terminalId: string; offset?: number }) {
+    return readSshTerminalSession({
+      sessions: this.sshTerminalSessions,
+      terminalId: params.terminalId,
+      offset: params.offset,
+    });
+  }
+
+  @callable()
+  async writeSshTerminal(params: { terminalId: string; data: string }) {
+    return writeSshTerminalSession({
+      sessions: this.sshTerminalSessions,
+      terminalId: params.terminalId,
+      data: params.data,
+    });
+  }
+
+  @callable()
+  async resizeSshTerminal(params: { terminalId: string; cols: number; rows: number }) {
+    return resizeSshTerminalSession({
+      sessions: this.sshTerminalSessions,
+      terminalId: params.terminalId,
+      cols: params.cols,
+      rows: params.rows,
+    });
+  }
+
+  @callable()
+  async closeSshTerminal(params: { terminalId: string }) {
+    return closeSshTerminalSession({
+      sessions: this.sshTerminalSessions,
+      terminalId: params.terminalId,
+    });
   }
 
   override async onChatMessage(
