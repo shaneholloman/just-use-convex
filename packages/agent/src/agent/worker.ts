@@ -133,7 +133,9 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     this.sandboxBackend = filesystemBackend ?? null;
 
     const subagents = [
-      ...(filesystemBackend ? [createSandboxToolkit(filesystemBackend, { store: this.backgroundTaskStore })].map((toolkit) => 
+      ...(filesystemBackend ? [createSandboxToolkit(filesystemBackend, {
+        store: this.backgroundTaskStore,
+      })].map((toolkit) => 
         new Agent({
           name: toolkit.name,
           purpose: toolkit.description,
@@ -202,7 +204,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         systemPrompt: [
           "Use write_todos when a task is multi-step or when a plan improves clarity.",
           "If the request is simple and direct, you may skip write_todos.",
-          "When you do use write_todos, keep 3-8 concise steps and exactly one in_progress.",
+          "When you do use write_todos, keep 3-8 concise steps.",
+          "When creating a plan, all steps must start with 'pending' status.",
+          "When all steps are executed, all the todos must end with 'done' status.",
+          "Regularly check and update the status of the todos to ensure they are accurate and up to date.",
         ].join("\n"),
       }),
     ]);
@@ -341,19 +346,19 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       const updateFn = this.convexAdapter.getTokenType() === "ext"
         ? api.chats.index.updateExt
         : api.chats.index.update;
-      this.convexAdapter.mutation(updateFn, {
+      void this.convexAdapter.mutation(updateFn, {
         _id: this.chatDoc?._id,
         patch: {},
-      });
+      }).catch(() => {});
 
       if (this.messages.length === 1 && this.messages[0]) {
         const textContent = extractMessageText(this.messages[0]);
         if (textContent) {
-          generateTitle({
+          void generateTitle({
             convexAdapter: this.convexAdapter,
             chatId: this.chatDoc?._id,
             userMessage: textContent,
-          });
+          }).catch(() => {});
         }
       }
 
@@ -363,7 +368,9 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         this.state.inputModalities
       );
 
-      this.sandboxBackend?.saveFilesToSandbox(messagesForSandbox);
+      if (this.sandboxBackend) {
+        void this.sandboxBackend.saveFilesToSandbox(messagesForSandbox).catch(() => {});
+      }
 
       const lastUserIdx = messagesForAgent.findLastIndex((m) => m.role === "user");
       const retrievalMessage = lastUserIdx !== -1
@@ -379,7 +386,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         : messagesForAgent;
 
       const agent = this.planAgent || (await this._prepAgent());
-      const stream = await agent?.streamText(modelMessages, {
+      const stream = await agent.streamText(modelMessages, {
         abortSignal: options?.abortSignal,
       });
 
@@ -389,7 +396,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         }),
       });
     } catch (error) {
-      return new Response("Internal Server Error: " + JSON.stringify(error, null, 2), { status: 500 });
+      console.error("onChatMessage failed", error);
+      return new Response("Internal Server Error", { status: 500 });
     }
   }
 }

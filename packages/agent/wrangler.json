@@ -7,7 +7,6 @@
     "nodejs_compat_populate_process_env"
   ],
   "vars": {
-    "SANDBOX_ROOT_DIR": "/workspace",
     "NODE_ENV": "production",
     "DAYTONA_TARGET": "us",
     "DEFAULT_MODEL": "openai/gpt-5.2-chat"

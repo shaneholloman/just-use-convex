@@ -1,6 +1,6 @@
 import type { BaseTool, ToolExecuteOptions } from "@voltagent/core";
 import { z, type ZodObject, type ZodRawShape } from "zod";
-import { executeWithTimeout } from "./timeout";
+import { executeWithTimeout, isToolTimeoutError } from "./timeout";
 import type {
   ToolCallConfig,
   WrappedExecuteOptions,
@@ -18,6 +18,7 @@ export function augmentParametersSchema(
   if (config.allowAgentSetDuration) {
     augmentedShape.timeout = z
       .number()
+      .nonnegative()
       .max(config.maxDuration ?? DEFAULT_MAX_DURATION_MS)
       .optional()
       .describe("Optional timeout in milliseconds");
@@ -148,17 +149,34 @@ export function createWrappedExecute({
       });
     }
 
-    const executionPromise = Promise.resolve(originalExecute(toolArgs, opts));
-    const executionFactory = () => executionPromise;
-    const abortSignal = opts?.toolContext?.abortSignal ?? opts?.abortController?.signal;
+    const executionFactory = (
+      backgroundSignal?: AbortSignal,
+      streamLogs?: WrappedExecuteOptions["streamLogs"]
+    ) => {
+      const abortController = deriveAbortController(opts, backgroundSignal);
+      const wrappedOptions: WrappedExecuteOptions = {
+        ...buildExecutionOptions(opts, abortController),
+        streamLogs,
+        log: streamLogs,
+      };
+      return originalExecute(toolArgs, wrappedOptions);
+    };
+    const foregroundAbortController = deriveAbortController(opts);
+    const foregroundOptions: WrappedExecuteOptions = {
+      ...buildExecutionOptions(opts, foregroundAbortController),
+    };
+    const executionPromise = Promise.resolve(originalExecute(toolArgs, foregroundOptions));
 
     try {
       return await executeWithTimeout(
         () => executionPromise,
         effectiveTimeout,
-        abortSignal
+        foregroundAbortController.signal
       );
     } catch (error) {
+      if (isToolTimeoutError(error)) {
+        foregroundAbortController.abort();
+      }
       for (const hook of beforeFailureHooks) {
         const hookResult = await hook({
           error,

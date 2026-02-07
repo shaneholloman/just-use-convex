@@ -1,20 +1,19 @@
 import { createTool, createToolkit, type Toolkit } from "@voltagent/core";
 import { z } from "zod";
-import { type BackgroundTaskStore, type WrappedExecuteOptions, createWrappedTool } from "../utils/wrapper";
+import { type BackgroundTaskStoreApi, type WrappedExecuteOptions, createWrappedTool } from "../utils/wrapper";
 import { SandboxFilesystemBackend } from "./backend";
 import { escapeShellArg } from "./shared";
 
 export interface SandboxToolkitOptions {
-  store: BackgroundTaskStore;
+  store: BackgroundTaskStoreApi;
   maxOutputChars?: number;
-  logDir?: string;
 }
 
 export function createSandboxToolkit(
   backend: SandboxFilesystemBackend,
   options: SandboxToolkitOptions
 ): Toolkit {
-  const { store, maxOutputChars = 30000, logDir = "/workspace/.logs" } = options;
+  const { store, maxOutputChars = 30000 } = options;
 
   const bashTool = createWrappedTool({
     name: "bash",
@@ -26,16 +25,16 @@ Use this tool for:
 - Running tests
 - Any shell command that needs to be executed
 
-The working directory is /workspace by default. Commands run in an isolated sandbox environment.
+The working directory defaults to the sandbox workdir. Commands run in an isolated sandbox environment.
 
 Important:
 - Commands have a default timeout of 5 minutes, then auto-convert to background task
 - For known long-running commands, use the background option to run asynchronously from the start
-- Use absolute paths or paths relative to /workspace
+- Use absolute paths or paths relative to the sandbox workdir
 - If output exceeds ${maxOutputChars} characters, it will be written to a log file that you can explore using grep or read tools`,
     parameters: z.object({
       command: z.string().describe("The bash command to execute"),
-      cwd: z.string().optional().describe("Working directory for the command (default: /workspace)"),
+      cwd: z.string().optional().describe("Working directory for the command (default: sandbox workdir)"),
     }),
     store,
     toolCallConfig: {
@@ -43,14 +42,14 @@ Important:
       allowAgentSetDuration: true,
       allowBackground: true,
     },
-    execute: async (args, options?: WrappedExecuteOptions) => {
+    execute: async (args, wrappedOptions?: WrappedExecuteOptions) => {
       const command = args.command as string;
       const cwd = args.cwd as string | undefined;
       const result = await backend.exec(command, {
         cwd,
-        timeout: options?.timeout,
-        abortSignal: options?.toolContext?.abortSignal ?? options?.abortController?.signal,
-        streamLogs: options?.streamLogs ?? options?.log,
+        timeout: wrappedOptions?.timeout,
+        abortSignal: wrappedOptions?.toolContext?.abortSignal ?? wrappedOptions?.abortController?.signal,
+        streamLogs: wrappedOptions?.streamLogs ?? wrappedOptions?.log,
       });
 
       const outputParts: string[] = [];
@@ -70,37 +69,48 @@ Important:
       const fullOutput = outputParts.join("\n").trim() || "(no output)";
 
       if (fullOutput.length > maxOutputChars) {
+        const effectiveLogDir = "/tmp/.output";
         const timestamp = Date.now();
         const commandSlug = command.slice(0, 30).replace(/[^a-zA-Z0-9]/g, "_");
-        const logFile = `${logDir}/bash_${timestamp}_${commandSlug}.log`;
+        const logFile = `${effectiveLogDir}/bash_${timestamp}_${commandSlug}.log`;
 
-        await backend.exec(`mkdir -p ${escapeShellArg(logDir)}`);
+        await backend.exec(`mkdir -p ${escapeShellArg(effectiveLogDir)}`);
         await backend.write(logFile, fullOutput);
 
         const truncatedOutput = fullOutput.slice(0, maxOutputChars);
         const lineCount = fullOutput.split("\n").length;
         const truncatedLineCount = truncatedOutput.split("\n").length;
 
-        return {
+        const truncatedResult = {
           success: result.success,
           output: truncatedOutput,
-          stdout: result.stdout,
-          stderr: result.stderr,
           exitCode: result.exitCode,
           truncated: true,
           logFile,
           message: `Output truncated (showing ${truncatedLineCount} of ${lineCount} lines, ${maxOutputChars} of ${fullOutput.length} chars). Full output saved to: ${logFile}. Use grep or read tools to explore the log file.`,
         };
+
+        if (!result.success) {
+          throw new Error(
+            `Command failed with exit code ${result.exitCode}\n${truncatedResult.output}\n${truncatedResult.message}`
+          );
+        }
+
+        return truncatedResult;
       }
 
-      return {
+      const commandResult = {
         success: result.success,
         output: fullOutput,
-        stdout: result.stdout,
-        stderr: result.stderr,
         exitCode: result.exitCode,
         truncated: false,
       };
+
+      if (!result.success) {
+        throw new Error(`Command failed with exit code ${result.exitCode}\n${commandResult.output}`);
+      }
+
+      return commandResult;
     },
   });
 
@@ -119,7 +129,7 @@ Important:
     name: "read_file",
     description: "Read the contents of a file",
     parameters: z.object({
-      file_path: z.string().describe("Absolute path to the file to read"),
+      file_path: z.string().describe("Path to the file to read (absolute or relative to sandbox workdir)"),
       offset: z.number().default(0).describe("Line offset to start reading from (0-indexed)"),
       limit: z.number().default(2000).describe("Maximum number of lines to read"),
     }),
@@ -130,13 +140,54 @@ Important:
 
   const writeFileTool = createTool({
     name: "write_file",
-    description: "Write content to a new file. Returns an error if the file already exists",
+    description: "Write content to a new file. Returns an error if the file already exists. Can optionally run LSP symbols for the written file.",
     parameters: z.object({
-      file_path: z.string().describe("Absolute path to the file to write"),
+      file_path: z.string().describe("Path to the file to write (absolute or relative to sandbox workdir)"),
       content: z.string().describe("Content to write to the file"),
+      run_lsp: z.boolean().default(false).describe("Run LSP symbol extraction for the file after writing"),
+      project_path: z.string().optional().describe("Project root path for LSP (defaults to sandbox workdir)"),
     }),
-    execute: async ({ file_path, content }) => {
-      return backend.write(file_path, content);
+    execute: async ({ file_path, content, run_lsp, project_path }) => {
+      const result = await backend.write(file_path, content);
+      if ("error" in result && result.error) {
+        throw new Error(result.error);
+      }
+
+      const payload = {
+        path: result.path,
+      };
+
+      if (!run_lsp) {
+        return payload;
+      }
+
+      const languageId = "typescript";
+      const lspProjectPath = (project_path?.trim() || ".");
+
+      try {
+        const symbols = await backend.lspDocumentSymbols(
+          languageId,
+          lspProjectPath,
+          file_path
+        );
+        return {
+          ...payload,
+          lsp: {
+            language_id: languageId,
+            project_path: lspProjectPath,
+            symbols,
+          },
+        };
+      } catch (error) {
+        return {
+          ...payload,
+          lsp: {
+            language_id: languageId,
+            project_path: lspProjectPath,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        };
+      }
     },
   });
 
@@ -144,13 +195,17 @@ Important:
     name: "edit_file",
     description: "Edit a file by replacing a specific string with a new string",
     parameters: z.object({
-      file_path: z.string().describe("Absolute path to the file to edit"),
+      file_path: z.string().describe("Path to the file to edit (absolute or relative to sandbox workdir)"),
       old_string: z.string().describe("String to be replaced (must match exactly)"),
       new_string: z.string().describe("String to replace with"),
       replace_all: z.boolean().default(false).describe("Whether to replace all occurrences"),
     }),
     execute: async ({ file_path, old_string, new_string, replace_all }) => {
-      return backend.edit(file_path, old_string, new_string, replace_all);
+      const result = await backend.edit(file_path, old_string, new_string, replace_all);
+      if ("error" in result && result.error) {
+        throw new Error(result.error);
+      }
+      return result;
     },
   });
 
@@ -253,7 +308,7 @@ Important:
   return createToolkit({
     name: "sandbox",
     description: "Sandbox tools for executing commands and managing files in an isolated environment",
-    instructions: SANDBOX_INSTRUCTIONS(backend.rootDir),
+    instructions: SANDBOX_INSTRUCTIONS,
     tools: [
       bashTool,
       lsTool,
@@ -271,7 +326,8 @@ Important:
   });
 }
 
-export const SANDBOX_INSTRUCTIONS = (rootDir: string) => `You have access to an isolated sandbox environment with a virtual filesystem in ${rootDir}.
+export const SANDBOX_INSTRUCTIONS = `You have access to an isolated sandbox environment with a virtual filesystem in the sandbox workdir.
+The workdir is resolved dynamically from the sandbox filesystem (Daytona).
 
 ## Tool Usage
 

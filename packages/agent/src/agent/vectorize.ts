@@ -108,7 +108,7 @@ export async function buildRetrievalMessage(args: {
     const role = typeof match.metadata?.role === "string" ? match.metadata.role : "unknown";
     const text = typeof match.metadata?.text === "string" ? match.metadata.text : "";
     const score = Number.isFinite(match.score) ? match.score.toFixed(4) : "n/a";
-    return `#${index + 1} (${role}, score ${score})\\n${text}`;
+    return `#${index + 1} (${role}, score ${score})\n${text}`;
   });
 
   return {

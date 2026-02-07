@@ -54,8 +54,9 @@ User uses casual language ("bro", "dawg", "ugh"). Keep responses terse and actio
 
 ## DO
 
-- **Infer types from existing packages** — never create custom types
+- **Infer and derive types from existing packages** — avoid new types; use `Pick`, `Omit`, and built-in TS utilities
 - **Check existing patterns** in codebase before implementing
+- **Cross-check server/client impact** — if you edit server-side code, verify client usage, and vice versa
 - **Use Context7 for third-party SDK API verification** before integrating
 - **Keep responses terse** and actionable
 - **Use memo with custom comparison** for streaming optimization
@@ -65,6 +66,8 @@ User uses casual language ("bro", "dawg", "ugh"). Keep responses terse and actio
 - **Use GitHub CLI efficiently** — prefer `gh` subcommands over manual API calls, and reuse existing auth/config without re-authing
 - **Match Tailwind patterns exactly** — don't modify unrelated classes
 - **DRY the code** — reuse existing utilities
+- **Clean up after approach changes** — remove stale paths/helpers when method changes
+- **Split oversized modules** — break complex files into focused, manageable units
 - **Ask clarifying questions** if requirements are unclear
 
 ## DON'T
@@ -149,12 +152,14 @@ File-based TanStack Router:
 
 - always run the typecheck at the end and iterate over it until finished
 - do not shy away from refactoring bad patterns, be proactive
-- avoid defining new types, infer and reuse exsisting types form other files / by importing them from the relevant package
+- avoid defining new types; infer and derive from existing types/packages (use `Pick`/`Omit` and TS utility types)
+- if you change server-side code, always verify affected client-side usage (and vice versa)
+- keep codebase DRY
+- cleanup stale code when changing methods/approach
 - always use convex ents for convex related stuff
 - whenever implementing something for convex, analyze adjecent and relevant files for similar pattern implementation
-- Daytona sandbox creation should default to snapshot `daytona-medium`
-- keep tool wrapper architecture under `tools/utils/wrapper`: timeout module must stay isolated from background, and timeout-to-background conversion must be handled via wrapper-level failure hooks
-- `streamLogs` in wrapper options is for live tool execution output (e.g. sandbox `exec`), not background-task log polling helpers
+- whenever working with external libraries always query context7 for their relevant docs
+- for Daytona sandbox backend code, avoid adding fallback/sanitization guardrails unless explicitly requested
 
 ## Background & Subagents
 

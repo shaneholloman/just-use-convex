@@ -26,7 +26,6 @@ export const worker = await Worker("agent-worker", {
   bindings: {
     agentWorker: agentWorkerNamespace,
     VECTORIZE_CHAT_MESSAGES: chatMessagesIndex,
-    SANDBOX_ROOT_DIR: '/workspace',
     NODE_ENV: "production",
     CONVEX_URL: alchemy.secret(process.env.CONVEX_URL),
     CONVEX_SITE_URL: alchemy.secret(process.env.CONVEX_SITE_URL),

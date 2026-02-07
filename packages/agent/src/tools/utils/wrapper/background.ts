@@ -8,6 +8,31 @@ import type {
   RunInBackgroundOptions,
 } from "./types";
 
+function extractFailureFromResult(result: unknown): string | null {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const value = result as Record<string, unknown>;
+  const errorMessage = typeof value.error === "string" ? value.error.trim() : "";
+  if (errorMessage) {
+    return errorMessage;
+  }
+
+  if (value.success === false) {
+    const stderr = typeof value.stderr === "string" ? value.stderr.trim() : "";
+    if (stderr) {
+      return stderr;
+    }
+    if (typeof value.exitCode === "number") {
+      return `Tool execution failed with exit code ${value.exitCode}`;
+    }
+    return "Tool execution reported success: false";
+  }
+
+  return null;
+}
+
 export class BackgroundTaskStore implements BackgroundTaskStoreApi {
   private tasks = new Map<string, BackgroundTask>();
   private idCounter = 0;
@@ -136,15 +161,36 @@ export function runInBackground({
       if (
         result &&
         typeof result === "object" &&
-        result !== null &&
-        (store.get(task.id)?.logs.length ?? 0) === 0
+        result !== null
       ) {
-        if ("stdout" in result && typeof result.stdout === "string" && result.stdout) {
+        const existingLogs = store.get(task.id)?.logs ?? [];
+        const hasStdoutLog = existingLogs.some((entry) => entry.type === "stdout");
+        const hasStderrLog = existingLogs.some((entry) => entry.type === "stderr");
+        if ("stdout" in result && typeof result.stdout === "string" && result.stdout && !hasStdoutLog) {
           store.addLog(task.id, { type: "stdout", message: result.stdout });
         }
-        if ("stderr" in result && typeof result.stderr === "string" && result.stderr) {
+        if ("stderr" in result && typeof result.stderr === "string" && result.stderr && !hasStderrLog) {
           store.addLog(task.id, { type: "stderr", message: result.stderr });
         }
+      }
+
+      const failureMessage = extractFailureFromResult(result);
+      if (failureMessage) {
+        store.addLog(task.id, { type: "error", message: failureMessage });
+        store.update(task.id, {
+          status: "failed",
+          result,
+          error: failureMessage,
+          completedAt: Date.now(),
+        });
+
+        return {
+          taskId: task.id,
+          status: "failed",
+          logs: store.get(task.id)?.logs ?? [],
+          result,
+          error: failureMessage,
+        };
       }
 
       store.update(task.id, { status: "completed", result, completedAt: Date.now() });
@@ -158,8 +204,9 @@ export function runInBackground({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       store.addLog(task.id, { type: "error", message: errorMessage });
-      const status: BackgroundTaskStatus =
-        error instanceof Error && error.name === "AbortError" ? "cancelled" : "failed";
+      const wasCancelled = task.abortController?.signal.aborted
+        || (error instanceof Error && error.name === "AbortError");
+      const status: BackgroundTaskStatus = wasCancelled ? "cancelled" : "failed";
       store.update(task.id, { status, error: errorMessage, completedAt: Date.now() });
 
       return {
