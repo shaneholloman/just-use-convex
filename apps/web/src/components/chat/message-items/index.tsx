@@ -39,6 +39,7 @@ export interface MessageItemProps {
   message: UIMessage;
   isStreaming: boolean;
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
+  isCompact?: boolean;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
   isLastAssistantMessage?: boolean;
@@ -64,6 +65,7 @@ export const MessageItem = memo(function MessageItem({
   message,
   isStreaming,
   toolApprovalResponse,
+  isCompact = false,
   onRegenerate,
   onEditMessage,
   isLastAssistantMessage,
@@ -74,6 +76,7 @@ export const MessageItem = memo(function MessageItem({
   const messageText = extractMessageText(message);
   const messageFiles = extractMessageFiles(message);
   const sources = useMemo(() => extractSourcesFromMessage(message), [message]);
+  const containerClassName = isCompact ? "w-full px-3" : "mx-auto w-4xl px-4";
 
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
@@ -181,7 +184,7 @@ export const MessageItem = memo(function MessageItem({
 
   if (isEditing && isUser) {
     return (
-      <Message from={message.role} className="mx-auto w-4xl px-4">
+      <Message from={message.role} className={containerClassName}>
         <div className="flex flex-col gap-3 max-w-[70%] ml-auto">
           {editedFiles.length > 0 && (
             <Attachments variant="grid">
@@ -258,7 +261,7 @@ export const MessageItem = memo(function MessageItem({
   }
 
   return (
-    <Message from={message.role} className="mx-auto w-4xl px-4">
+    <Message from={message.role} className={containerClassName}>
       <div className="group/message">
         <MessageContent className="group-[.is-user]:max-w-[70%]">
           {renderParts()}
@@ -281,6 +284,10 @@ export const MessageItem = memo(function MessageItem({
     </Message>
   );
 }, (prev, next) => {
+  if (prev.isCompact !== next.isCompact) {
+    return false;
+  }
+
   // For completed messages (not streaming), skip re-render if ID matches
   if (!prev.isStreaming && !next.isStreaming) {
     if (prev.message.id !== next.message.id) return false;

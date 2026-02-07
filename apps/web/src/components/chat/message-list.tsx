@@ -18,6 +18,7 @@ interface MessageListProps {
   messages: UIMessage[];
   isStreaming: boolean;
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
+  isCompact?: boolean;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
   onTodosChange?: (todosState: TodosState) => void;
@@ -28,6 +29,7 @@ export function MessageList({
   messages,
   isStreaming,
   toolApprovalResponse,
+  isCompact = false,
   onRegenerate,
   onEditMessage,
   onTodosChange,
@@ -69,6 +71,7 @@ export function MessageList({
             message={message}
             isStreaming={isStreaming && index === messages.length - 1}
             toolApprovalResponse={toolApprovalResponse}
+            isCompact={isCompact}
             onRegenerate={onRegenerate}
             onEditMessage={onEditMessage}
             isLastAssistantMessage={index === lastAssistantMessageIndex}

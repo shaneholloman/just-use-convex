@@ -44,14 +44,14 @@ type MutationCtx = GenericMutationCtx<DataModel>;
 
 export const sandboxDaytonaTrigger: Trigger<MutationCtx, DataModel, "sandboxes"> = async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.scheduler.runAfter(0, internal.sandboxes.indexDaytona.provision, {
+    await ctx.scheduler.runAfter(0, internal.sandboxes.nodeFunctions.provision, {
       sandboxId: change.id,
     });
     return;
   }
 
   if (change.operation === "delete") {
-    await ctx.scheduler.runAfter(0, internal.sandboxes.indexDaytona.destroy, {
+    await ctx.scheduler.runAfter(0, internal.sandboxes.nodeFunctions.destroy, {
       sandboxId: change.id,
     });
   }
