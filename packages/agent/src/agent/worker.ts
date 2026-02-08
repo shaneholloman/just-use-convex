@@ -1,5 +1,5 @@
 import { type Connection, type ConnectionContext, callable } from "agents";
-import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
+import { type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -24,18 +24,11 @@ import {
   parseTokenFromUrl,
 } from "@just-use-convex/backend/convex/lib/convexAdapter";
 import type { FunctionReturnType } from "convex/server";
-import type { worker } from "../../alchemy.run";
 import { createAiClient } from "../client";
 import { SYSTEM_PROMPT, TASK_PROMPT } from "../prompt";
 import { createAskUserToolkit } from "../tools/ask-user";
 import {
-  closeSshTerminal as closeSshTerminalSession,
-  createSshTerminalSessions,
-  listFiles as listSandboxFiles,
-  openSshTerminal as openSshTerminalSession,
-  readSshTerminal as readSshTerminalSession,
-  resizeSshTerminal as resizeSshTerminalSession,
-  writeSshTerminal as writeSshTerminalSession,
+  SandboxTerminalAgentBase,
 } from "../tools/sandbox/backend/terminal";
 import { SandboxFilesystemBackend, createSandboxToolkit } from "../tools/sandbox";
 import { createWebSearchToolkit } from "../tools/websearch";
@@ -55,14 +48,13 @@ import {
 } from "./vectorize";
 import { createVectorizeToolkit } from "../tools/vectorize";
 
-export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
+export class AgentWorker extends SandboxTerminalAgentBase<AgentArgs> {
   private convexAdapter: ConvexAdapter | null = null;
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
   private sandboxBackend: SandboxFilesystemBackend | null = null;
   private backgroundTaskStore = new BackgroundTaskStore();
   private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
-  private sshTerminalSessions = createSshTerminalSessions();
 
   private async _init(args?: AgentArgs): Promise<void> {
     if (args) {
@@ -337,72 +329,12 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     await this.persistMessages(messages);
   }
 
-  @callable()
-  async openSshTerminal(params?: {
-    cols?: number;
-    rows?: number;
-  }) {
+  protected async initSandboxAccess(): Promise<void> {
     await this._init();
-    if (!this.sandboxId) {
-      throw new Error("This chat does not have a sandbox attached");
-    }
-    return openSshTerminalSession({
-      env: this.env,
-      sandboxName: this.sandboxId,
-      sessions: this.sshTerminalSessions,
-      waitUntil: this.ctx.waitUntil.bind(this.ctx),
-      cols: params?.cols,
-      rows: params?.rows,
-    });
   }
 
-  @callable()
-  async readSshTerminal(params: { terminalId: string; offset?: number }) {
-    return readSshTerminalSession({
-      sessions: this.sshTerminalSessions,
-      terminalId: params.terminalId,
-      offset: params.offset,
-    });
-  }
-
-  @callable()
-  async writeSshTerminal(params: { terminalId: string; data: string }) {
-    return writeSshTerminalSession({
-      sessions: this.sshTerminalSessions,
-      terminalId: params.terminalId,
-      data: params.data,
-    });
-  }
-
-  @callable()
-  async resizeSshTerminal(params: { terminalId: string; cols: number; rows: number }) {
-    return resizeSshTerminalSession({
-      sessions: this.sshTerminalSessions,
-      terminalId: params.terminalId,
-      cols: params.cols,
-      rows: params.rows,
-    });
-  }
-
-  @callable()
-  async closeSshTerminal(params: { terminalId: string }) {
-    return closeSshTerminalSession({
-      sessions: this.sshTerminalSessions,
-      terminalId: params.terminalId,
-    });
-  }
-
-  @callable()
-  async listFiles(params?: { path?: string }) {
-    await this._init();
-    if (!this.sandboxId) {
-      throw new Error("This chat does not have a sandbox attached");
-    }
-    return listSandboxFiles({
-      env: this.env,
-      sandboxName: this.sandboxId,
-      path: params?.path,
-    });
+  protected getSandboxIdForTerminal(): string | null {
+    return this.sandboxId;
   }
 
   override async onChatMessage(

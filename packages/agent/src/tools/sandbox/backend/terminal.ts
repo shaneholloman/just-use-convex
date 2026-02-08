@@ -1,3 +1,5 @@
+import { callable } from "agents";
+import { AIChatAgent } from "@cloudflare/ai-chat";
 import type { PtyHandle } from "@daytonaio/sdk";
 import type { worker } from "../../../../alchemy.run";
 import { getSandbox, type SandboxInstance } from "./daytona";
@@ -7,7 +9,7 @@ type TerminalChunk = {
   data: string;
 };
 
-export type SshTerminalSession = {
+export type PtyTerminalSession = {
   sandbox: SandboxInstance;
   ptyHandle: PtyHandle;
   chunks: TerminalChunk[];
@@ -18,47 +20,47 @@ export type SshTerminalSession = {
   lastUsedAt: number;
 };
 
-export type SshTerminalSessions = Map<string, SshTerminalSession>;
+export type PtyTerminalSessions = Map<string, PtyTerminalSession>;
 
-export type OpenSshTerminalParams = {
+export type OpenPtyTerminalParams = {
   env: typeof worker.Env;
   sandboxName: string;
-  sessions: SshTerminalSessions;
+  sessions: PtyTerminalSessions;
   waitUntil: (promise: Promise<unknown>) => void;
   cols?: number;
   rows?: number;
 };
 
-export type ReadSshTerminalParams = {
-  sessions: SshTerminalSessions;
+export type ReadPtyTerminalParams = {
+  sessions: PtyTerminalSessions;
   terminalId: string;
   offset?: number;
 };
 
-export type WriteSshTerminalParams = {
-  sessions: SshTerminalSessions;
+export type WritePtyTerminalParams = {
+  sessions: PtyTerminalSessions;
   terminalId: string;
   data: string;
 };
 
-export type ResizeSshTerminalParams = {
-  sessions: SshTerminalSessions;
+export type ResizePtyTerminalParams = {
+  sessions: PtyTerminalSessions;
   terminalId: string;
   cols: number;
   rows: number;
 };
 
-export type CloseSshTerminalParams = {
-  sessions: SshTerminalSessions;
+export type ClosePtyTerminalParams = {
+  sessions: PtyTerminalSessions;
   terminalId: string;
 };
 
-export function createSshTerminalSessions(): SshTerminalSessions {
-  return new Map<string, SshTerminalSession>();
+export function createPtyTerminalSessions(): PtyTerminalSessions {
+  return new Map<string, PtyTerminalSession>();
 }
 
-async function closeSshTerminalSession(
-  sessions: SshTerminalSessions,
+async function closePtyTerminalSession(
+  sessions: PtyTerminalSessions,
   terminalId: string,
   reason: string
 ) {
@@ -77,7 +79,7 @@ async function closeSshTerminalSession(
   sessions.delete(terminalId);
 }
 
-function pushTerminalChunk(session: SshTerminalSession, data: string) {
+function pushTerminalChunk(session: PtyTerminalSession, data: string) {
   session.chunks.push({
     offset: session.nextSeq,
     data,
@@ -88,7 +90,7 @@ function pushTerminalChunk(session: SshTerminalSession, data: string) {
   }
 }
 
-function markTerminalClosed(sessions: SshTerminalSessions, terminalId: string, reason?: string) {
+function markTerminalClosed(sessions: PtyTerminalSessions, terminalId: string, reason?: string) {
   const session = sessions.get(terminalId);
   if (!session) {
     return;
@@ -100,14 +102,14 @@ function markTerminalClosed(sessions: SshTerminalSessions, terminalId: string, r
   session.lastUsedAt = Date.now();
 }
 
-export async function openSshTerminal({
+export async function openPtyTerminal({
   env,
   sandboxName,
   sessions,
   waitUntil,
   cols = 120,
   rows = 30,
-}: OpenSshTerminalParams) {
+}: OpenPtyTerminalParams) {
   if (!env.DAYTONA_API_KEY) {
     throw new Error("DAYTONA_API_KEY is not configured");
   }
@@ -170,7 +172,7 @@ export async function openSshTerminal({
   };
 }
 
-export async function readSshTerminal({ sessions, terminalId, offset }: ReadSshTerminalParams) {
+export async function readPtyTerminal({ sessions, terminalId, offset }: ReadPtyTerminalParams) {
   const session = sessions.get(terminalId);
   if (!session) {
     return {
@@ -207,7 +209,7 @@ export async function readSshTerminal({ sessions, terminalId, offset }: ReadSshT
   };
 }
 
-export async function writeSshTerminal({ sessions, terminalId, data }: WriteSshTerminalParams) {
+export async function writePtyTerminal({ sessions, terminalId, data }: WritePtyTerminalParams) {
   const session = sessions.get(terminalId);
   if (!session || session.closed) {
     throw new Error("Terminal session is not connected");
@@ -217,12 +219,12 @@ export async function writeSshTerminal({ sessions, terminalId, data }: WriteSshT
   return { ok: true };
 }
 
-export async function resizeSshTerminal({
+export async function resizePtyTerminal({
   sessions,
   terminalId,
   cols,
   rows,
-}: ResizeSshTerminalParams) {
+}: ResizePtyTerminalParams) {
   const session = sessions.get(terminalId);
   if (!session || session.closed) {
     return { ok: false };
@@ -234,9 +236,125 @@ export async function resizeSshTerminal({
   return { ok: true };
 }
 
-export async function closeSshTerminal({ sessions, terminalId }: CloseSshTerminalParams) {
-  await closeSshTerminalSession(sessions, terminalId, "Closed by client");
+export async function closePtyTerminal({ sessions, terminalId }: ClosePtyTerminalParams) {
+  await closePtyTerminalSession(sessions, terminalId, "Closed by client");
   return { ok: true };
+}
+
+export class PtyTerminalService {
+  private sessions: PtyTerminalSessions;
+
+  constructor(sessions: PtyTerminalSessions = createPtyTerminalSessions()) {
+    this.sessions = sessions;
+  }
+
+  async open(params: Omit<OpenPtyTerminalParams, "sessions">) {
+    return openPtyTerminal({
+      ...params,
+      sessions: this.sessions,
+    });
+  }
+
+  async read(params: Omit<ReadPtyTerminalParams, "sessions">) {
+    return readPtyTerminal({
+      ...params,
+      sessions: this.sessions,
+    });
+  }
+
+  async write(params: Omit<WritePtyTerminalParams, "sessions">) {
+    return writePtyTerminal({
+      ...params,
+      sessions: this.sessions,
+    });
+  }
+
+  async resize(params: Omit<ResizePtyTerminalParams, "sessions">) {
+    return resizePtyTerminal({
+      ...params,
+      sessions: this.sessions,
+    });
+  }
+
+  async close(params: Omit<ClosePtyTerminalParams, "sessions">) {
+    return closePtyTerminal({
+      ...params,
+      sessions: this.sessions,
+    });
+  }
+}
+
+export abstract class SandboxTerminalAgentBase<TArgs>
+  extends AIChatAgent<typeof worker.Env, TArgs> {
+  protected readonly ptyTerminalService = new PtyTerminalService();
+
+  protected abstract initSandboxAccess(): Promise<void>;
+  protected abstract getSandboxIdForTerminal(): string | null;
+
+  @callable()
+  async openPtyTerminal(params?: {
+    cols?: number;
+    rows?: number;
+  }) {
+    await this.initSandboxAccess();
+    const sandboxId = this.getSandboxIdForTerminal();
+    if (!sandboxId) {
+      throw new Error("This chat does not have a sandbox attached");
+    }
+    return this.ptyTerminalService.open({
+      env: this.env,
+      sandboxName: sandboxId,
+      waitUntil: this.ctx.waitUntil.bind(this.ctx),
+      cols: params?.cols,
+      rows: params?.rows,
+    });
+  }
+
+  @callable()
+  async readPtyTerminal(params: { terminalId: string; offset?: number }) {
+    return this.ptyTerminalService.read({
+      terminalId: params.terminalId,
+      offset: params.offset,
+    });
+  }
+
+  @callable()
+  async writePtyTerminal(params: { terminalId: string; data: string }) {
+    return this.ptyTerminalService.write({
+      terminalId: params.terminalId,
+      data: params.data,
+    });
+  }
+
+  @callable()
+  async resizePtyTerminal(params: { terminalId: string; cols: number; rows: number }) {
+    return this.ptyTerminalService.resize({
+      terminalId: params.terminalId,
+      cols: params.cols,
+      rows: params.rows,
+    });
+  }
+
+  @callable()
+  async closePtyTerminal(params: { terminalId: string }) {
+    return this.ptyTerminalService.close({
+      terminalId: params.terminalId,
+    });
+  }
+
+  @callable()
+  async listFiles(params?: { path?: string }) {
+    await this.initSandboxAccess();
+    const sandboxId = this.getSandboxIdForTerminal();
+    if (!sandboxId) {
+      throw new Error("This chat does not have a sandbox attached");
+    }
+    return listFiles({
+      env: this.env,
+      sandboxName: sandboxId,
+      path: params?.path,
+    });
+  }
 }
 
 export type ListFilesParams = {

@@ -239,21 +239,21 @@ export function useChatSandbox(
         term.dispose();
       };
 
-      const openResponse = await agent.call("openSshTerminal", [{
+      const openResponse = await agent.call("openPtyTerminal", [{
         cols: term.cols,
         rows: term.rows,
       }]) as { terminalId?: string };
       if (isCancelled) {
         const terminalId = openResponse?.terminalId;
         if (terminalId) {
-          void agent.call("closeSshTerminal", [{ terminalId }]).catch(() => undefined);
+          void agent.call("closePtyTerminal", [{ terminalId }]).catch(() => undefined);
         }
         return;
       }
 
       const terminalId = openResponse?.terminalId;
       if (!terminalId) {
-        term.writeln("\r\nFailed to open SSH terminal session.");
+        term.writeln("\r\nFailed to open PTY terminal session.");
         return;
       }
       terminalIdRef.current = terminalId;
@@ -273,7 +273,7 @@ export function useChatSandbox(
         }
         terminalWriteInFlightRef.current = true;
         terminalInputBufferRef.current = "";
-        void agent.call("writeSshTerminal", [{
+        void agent.call("writePtyTerminal", [{
           terminalId: terminalIdRef.current,
           data: pendingInput,
         }]).then(() => {
@@ -294,7 +294,7 @@ export function useChatSandbox(
         if (!terminalIdRef.current) {
           return;
         }
-        void agent.call("resizeSshTerminal", [{
+        void agent.call("resizePtyTerminal", [{
           terminalId: terminalIdRef.current,
           cols: term.cols,
           rows: term.rows,
@@ -307,7 +307,7 @@ export function useChatSandbox(
           return;
         }
 
-        void agent.call("readSshTerminal", [{
+        void agent.call("readPtyTerminal", [{
           terminalId: terminalIdRef.current,
           offset: terminalCursorRef.current,
         }]).then((result) => {
@@ -361,7 +361,7 @@ export function useChatSandbox(
       terminalWriteInFlightRef.current = false;
       terminalWriteErroredRef.current = false;
       if (terminalId) {
-        void agent.call("closeSshTerminal", [{ terminalId }]).catch(() => undefined);
+        void agent.call("closePtyTerminal", [{ terminalId }]).catch(() => undefined);
       }
 
       terminalRef.current = null;
