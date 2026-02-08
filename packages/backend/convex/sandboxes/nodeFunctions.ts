@@ -11,6 +11,7 @@ import { api } from "../_generated/api";
 import * as types from "./types";
 
 let daytonaClient: Daytona | null = null;
+const SANDBOX_VOLUME_MOUNT_PATH = "/home/daytona/volume";
 
 function getDaytonaClient() {
   if (daytonaClient) {
@@ -54,7 +55,9 @@ export const provision = internalAction({
   },
   handler: async (_ctx, args) => {
     const sandboxName = args.sandboxId;
+    const volumeName = getSandboxVolumeName(sandboxName);
     const daytona = getDaytonaClient();
+    const volume = await daytona.volume.get(volumeName, true);
 
     try {
       await daytona.get(sandboxName);
@@ -69,8 +72,11 @@ export const provision = internalAction({
       name: sandboxName,
       language: "typescript",
       snapshot: "daytona-medium",
+      volumes: [{ volumeId: volume.id, mountPath: SANDBOX_VOLUME_MOUNT_PATH }],
       labels: {
         convexSandboxId: sandboxName,
+        convexVolumeId: volume.id,
+        convexVolumeName: volume.name,
       },
     });
   },
@@ -82,10 +88,22 @@ export const destroy = internalAction({
   },
   handler: async (_ctx, args) => {
     const daytona = getDaytonaClient();
+    const volumeName = getSandboxVolumeName(args.sandboxId);
 
     try {
       const sandbox = await daytona.get(args.sandboxId);
       await sandbox.delete();
+    } catch (error) {
+      if (error instanceof DaytonaNotFoundError) {
+        // Sandbox may already be gone; continue and try deleting the dedicated volume.
+      } else {
+        throw error;
+      }
+    }
+
+    try {
+      const volume = await daytona.volume.get(volumeName, false);
+      await daytona.volume.delete(volume);
     } catch (error) {
       if (error instanceof DaytonaNotFoundError) {
         return;
@@ -184,4 +202,8 @@ async function createChatPreviewAccessFunction(ctx: zActionCtx, args: z.infer<ty
       token: previewLink.token ?? null,
     },
   };
+}
+
+function getSandboxVolumeName(sandboxId: string) {
+  return `sandbox-${sandboxId}`;
 }

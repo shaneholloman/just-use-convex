@@ -44,7 +44,6 @@ function ChatPage() {
   const sandbox = useChatSandbox(typedChatId, agent);
   const chatContentRef = useRef<HTMLDivElement>(null);
   const [isPanelResizing, setIsPanelResizing] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(0);
 
   const selectedModel = useMemo(
     () => models.find((m: OpenRouterModel) => m.slug === settings.model),
@@ -53,25 +52,6 @@ function ChatPage() {
 
   const [todosState, setTodosState] = useState<TodosState>({ todos: [] });
   const [askUserState, setAskUserState] = useState<AskUserState | null>(null);
-
-  useEffect(() => {
-    const header = document.getElementById("app-header");
-    if (!header) {
-      return;
-    }
-
-    const updateHeaderHeight = () => {
-      setHeaderHeight(header.getBoundingClientRect().height);
-    };
-
-    updateHeaderHeight();
-    const resizeObserver = new ResizeObserver(updateHeaderHeight);
-    resizeObserver.observe(header);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   const {
     status,
@@ -137,10 +117,8 @@ function ChatPage() {
 
   if (!isReady || !chat) {
     return (
-      <div className="flex h-svh flex-col">
-        <div className="flex-1 flex">
-          <ChatLoadingSkeleton />
-        </div>
+      <div className="fixed inset-0 z-0 h-svh w-full">
+        <ChatLoadingSkeleton />
       </div>
     );
   }
@@ -160,7 +138,6 @@ function ChatPage() {
               messages={messages}
               isStreaming={isStreaming}
               toolApprovalResponse={handleToolApprovalResponse}
-              headerHeight={headerHeight}
               onRegenerate={handleRegenerate}
               onEditMessage={handleEditMessage}
               onTodosChange={setTodosState}
@@ -211,7 +188,7 @@ function ChatPage() {
   );
 
   return (
-    <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+    <ResizablePanelGroup orientation="horizontal" className="fixed inset-0 z-0 h-svh w-full">
       <ResizablePanel defaultSize={sandbox.isOpen ? 65 : 100} minSize={20}>
         {chatContent}
       </ResizablePanel>

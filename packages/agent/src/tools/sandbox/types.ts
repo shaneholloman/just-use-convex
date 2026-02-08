@@ -135,6 +135,32 @@ export const lspCompletionsParameters = z.object({
   character: z.number().int().nonnegative(),
 });
 
+export const exposeServiceParameters = z.object({
+  port: z
+    .number()
+    .int()
+    .min(3000)
+    .max(9999)
+    .default(3000)
+    .describe("Sandbox HTTP port to expose (Daytona preview supports 3000-9999)."),
+  previewType: z
+    .enum(["standard", "signed", "both"])
+    .default("both")
+    .describe("Preview link type: standard (header token), signed (token in URL), or both."),
+  expiresInSeconds: z
+    .number()
+    .int()
+    .positive()
+    .max(24 * 60 * 60)
+    .optional()
+    .describe("Signed preview URL TTL in seconds. Defaults to Daytona's default (60s)."),
+  revokeSignedToken: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Optional signed token to revoke before returning preview links."),
+});
+
 export type LsInput = z.infer<typeof lsParameters>;
 export type ReadInput = z.infer<typeof readParameters>;
 export type WriteInput = z.infer<typeof writeParameters>;
@@ -150,5 +176,6 @@ export type XtermResizeInput = z.infer<typeof xtermResizeParameters>;
 export type XtermCloseInput = z.infer<typeof xtermCloseParameters>;
 export type XtermListInput = z.infer<typeof xtermListParameters>;
 export type LspCompletionsInput = z.infer<typeof lspCompletionsParameters>;
+export type ExposeServiceInput = z.infer<typeof exposeServiceParameters>;
 
 export type GrepMatch = Pick<Match, "file" | "line" | "content">;

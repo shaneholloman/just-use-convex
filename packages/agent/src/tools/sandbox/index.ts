@@ -31,6 +31,7 @@ import {
 } from "./pty";
 import {
   editParameters,
+  exposeServiceParameters,
   execParameters,
   globParameters,
   grepParameters,
@@ -42,6 +43,7 @@ import {
   type EditInput,
   type ExecInput,
   type ExecOutput,
+  type ExposeServiceInput,
   type GlobInput,
   type GrepInput,
   type LsInput,
@@ -67,6 +69,8 @@ const SANDBOX_TOOLKIT_INSTRUCTIONS = `You can operate directly on the chat sandb
 - PTY sessions are get-or-create by terminalId.
 - LSP has a single active session per sandbox: reused for same language, recreated on language change.
 - Use \`exec\` for command execution via PTY.
+- Use \`expose_service\` to expose HTTP services on ports 3000-9999.
+- Standard preview auth uses \`x-daytona-preview-token\`; signed preview auth is embedded in the URL.
 - LSP lifecycle is managed automatically.`;
 
 const DEFAULT_TOOL_CALL_CONFIG = {
@@ -81,6 +85,7 @@ const SANDBOX_UPLOADS_DIR = "workspace/uploads";
 const SANDBOX_UPLOADS_TEMP_DIR = "workspace/.tmp/uploads";
 const EDIT_RESULT_START_MARKER = "__JUC_EDIT_RESULT_START__";
 const EDIT_RESULT_END_MARKER = "__JUC_EDIT_RESULT_END__";
+const DAYTONA_PREVIEW_TOKEN_HEADER = "x-daytona-preview-token";
 
 export class SandboxFilesystemBackend {
   private readonly daytona: Daytona;
@@ -329,6 +334,35 @@ export class SandboxFilesystemBackend {
     return result;
   }
 
+  async exposeService(input: ExposeServiceInput) {
+    const sandboxSession = this.ensureSandboxSession();
+    const sandbox = sandboxSession.sandbox;
+    const revokedSignedToken = input.revokeSignedToken?.trim();
+    const shouldFetchStandard =
+      input.previewType === "standard" || input.previewType === "both";
+    const shouldFetchSigned =
+      input.previewType === "signed" || input.previewType === "both";
+
+    if (revokedSignedToken) {
+      await sandbox.expireSignedPreviewUrl(input.port, revokedSignedToken);
+    }
+
+    const [standardPreview, signedPreview] = await Promise.all([
+      shouldFetchStandard ? sandbox.getPreviewLink(input.port) : Promise.resolve(null),
+      shouldFetchSigned
+        ? sandbox.getSignedPreviewUrl(input.port, input.expiresInSeconds)
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      port: input.port,
+      previewType: input.previewType,
+      ...(revokedSignedToken ? { revokedSignedToken } : {}),
+      ...(standardPreview ? { standard: buildStandardPreviewResult(standardPreview) } : {}),
+      ...(signedPreview ? { signed: buildSignedPreviewResult(signedPreview, input) } : {}),
+    };
+  }
+
   async readPtySession(
     input: XtermReadInput &
       Pick<XtermWriteInput, "cols" | "rows" | "cwd" | "envs">
@@ -532,6 +566,17 @@ export function createSandboxToolkit(
       description: "Execute a shell command through a PTY session.",
       parameters: execParameters,
       execute: async (args) => await filesystemBackend.exec(execParameters.parse(args)),
+    }),
+    createSandboxTool(options, {
+      name: "expose_service",
+      description:
+        "Expose a sandbox HTTP service by generating Daytona standard and/or signed preview links.",
+      parameters: exposeServiceParameters,
+      execute: async (args) => {
+        return await filesystemBackend.exposeService(
+          exposeServiceParameters.parse(args)
+        );
+      },
     }),
     createSandboxTool(options, {
       name: "close_pty_session",
@@ -770,6 +815,36 @@ function extractMarkedContent(
     return null;
   }
   return lastContent.trim();
+}
+
+function buildStandardPreviewResult(
+  preview: Awaited<ReturnType<Sandbox["getPreviewLink"]>>
+) {
+  return {
+    url: preview.url,
+    token: preview.token ?? null,
+    auth: {
+      type: "header" as const,
+      headerName: DAYTONA_PREVIEW_TOKEN_HEADER,
+      ...(preview.token ? { headerValue: preview.token } : {}),
+    },
+  };
+}
+
+function buildSignedPreviewResult(
+  preview: Awaited<ReturnType<Sandbox["getSignedPreviewUrl"]>>,
+  input: Pick<ExposeServiceInput, "expiresInSeconds">
+) {
+  return {
+    url: preview.url,
+    token: preview.token,
+    ...(input.expiresInSeconds !== undefined
+      ? { expiresInSeconds: input.expiresInSeconds }
+      : {}),
+    auth: {
+      type: "token_in_url" as const,
+    },
+  };
 }
 
 function shellQuote(value: string): string {
