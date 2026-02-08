@@ -31,7 +31,7 @@ export type BackgroundTask = {
 };
 
 export interface BackgroundTaskStoreApi {
-  readonly waitUntil?: (promise: Promise<unknown>) => void;
+  waitUntil: (promise: Promise<unknown>) => void;
   create(toolName: string, args: Record<string, unknown>, toolCallId: string): BackgroundTask;
   get(id: string): BackgroundTask | undefined;
   getAll(): BackgroundTask[];
@@ -47,15 +47,6 @@ export interface BackgroundTaskStoreApi {
 
 export type BackgroundTaskResult = {
   backgroundTaskId: string;
-  status: "started" | "converted_to_background";
-};
-
-export type BackgroundTaskWaitUntilResult = {
-  taskId: string;
-  status: BackgroundTaskStatus;
-  logs: BackgroundTaskLog[];
-  result?: unknown;
-  error?: string;
 };
 
 export type ExecutionFactory = (
@@ -70,7 +61,6 @@ export type RunInBackgroundOptions = {
   toolArgs: Record<string, unknown>;
   executionFactory: ExecutionFactory;
   timeoutMs: number;
-  initialLog?: string;
 };
 
 export const TERMINAL_STATUSES: readonly BackgroundTaskStatus[] = [
@@ -135,11 +125,7 @@ export type BeforeFailureHook = (
 
 export type WrappedExecuteFactoryOptions = {
   toolName: string;
-  originalExecute: (
-    args: Record<string, unknown>,
-    opts?: ToolExecuteOptions
-  ) => unknown | Promise<unknown>;
+  execute: (args: Record<string, unknown>, opts?: ToolExecuteOptions) => unknown | Promise<unknown>;
   config: ToolCallConfig;
-  startBackground?: StartBackgroundTask;
   beforeFailureHooks?: BeforeFailureHook[];
 };

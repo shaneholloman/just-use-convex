@@ -54,7 +54,7 @@ export class AgentWorker extends SandboxTerminalAgentBase<AgentArgs> {
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
   private sandboxBackend: SandboxFilesystemBackend | null = null;
-  private backgroundTaskStore = new BackgroundTaskStore();
+  private backgroundTaskStore = new BackgroundTaskStore(this.ctx.waitUntil.bind(this.ctx));
   private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
 
   private async _init(args?: AgentArgs): Promise<void> {
@@ -120,7 +120,6 @@ export class AgentWorker extends SandboxTerminalAgentBase<AgentArgs> {
   private async _prepAgent(): Promise<PlanAgent> {
     const boundWaitUntil = this.ctx.waitUntil.bind(this.ctx);
     setWaitUntil(boundWaitUntil);
-    this.backgroundTaskStore.setWaitUntil(boundWaitUntil);
     const registry = AgentRegistry.getInstance();
     if (this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY) {
       registry.setGlobalVoltOpsClient(

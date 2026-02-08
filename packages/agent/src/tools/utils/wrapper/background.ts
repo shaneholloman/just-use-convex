@@ -1,54 +1,20 @@
-import { executeWithTimeout } from "./timeout";
+import { executeWithTimeout, isAbortError } from "./timeout";
 import type {
   BackgroundTask,
+  BackgroundTaskLog,
   BackgroundTaskResult,
   BackgroundTaskStatus,
   BackgroundTaskStoreApi,
-  BackgroundTaskWaitUntilResult,
   RunInBackgroundOptions,
 } from "./types";
 
-function extractFailureFromResult(result: unknown): string | null {
-  if (!result || typeof result !== "object") {
-    return null;
-  }
-
-  const value = result as Record<string, unknown>;
-  const errorMessage = typeof value.error === "string" ? value.error.trim() : "";
-  if (errorMessage) {
-    return errorMessage;
-  }
-
-  if (value.success === false) {
-    const stderr = typeof value.stderr === "string" ? value.stderr.trim() : "";
-    if (stderr) {
-      return stderr;
-    }
-    if (typeof value.exitCode === "number") {
-      return `Tool execution failed with exit code ${value.exitCode}`;
-    }
-    return "Tool execution reported success: false";
-  }
-
-  return null;
-}
+const DEFAULT_TASK_RETENTION_MS = 60 * 60 * 1000;
 
 export class BackgroundTaskStore implements BackgroundTaskStoreApi {
   private tasks = new Map<string, BackgroundTask>();
   private idCounter = 0;
-  private _waitUntil?: (promise: Promise<unknown>) => void;
 
-  setWaitUntil(waitUntil: (promise: Promise<unknown>) => void): void {
-    this._waitUntil = waitUntil;
-  }
-
-  get waitUntil(): ((promise: Promise<unknown>) => void) | undefined {
-    return this._waitUntil;
-  }
-
-  generateId(): string {
-    return `bg_${Date.now()}_${++this.idCounter}`;
-  }
+  constructor(readonly waitUntil: (promise: Promise<unknown>) => void) {}
 
   create(toolName: string, args: Record<string, unknown>, toolCallId: string): BackgroundTask {
     const task: BackgroundTask = {
@@ -61,6 +27,7 @@ export class BackgroundTaskStore implements BackgroundTaskStoreApi {
       logs: [],
       abortController: new AbortController(),
     };
+
     this.tasks.set(task.id, task);
     return task;
   }
@@ -75,30 +42,45 @@ export class BackgroundTaskStore implements BackgroundTaskStoreApi {
 
   update(id: string, updates: Partial<BackgroundTask>): void {
     const task = this.tasks.get(id);
-    if (task) {
-      Object.assign(task, updates);
+    if (!task) {
+      return;
     }
+
+    Object.assign(task, updates);
   }
 
-  addLog(id: string, log: Omit<BackgroundTask["logs"][number], "timestamp">): void {
+  addLog(id: string, log: Omit<BackgroundTaskLog, "timestamp">): void {
     const task = this.tasks.get(id);
-    if (task) {
-      task.logs.push({ ...log, timestamp: Date.now() });
+    if (!task) {
+      return;
     }
+
+    task.logs.push({
+      timestamp: Date.now(),
+      ...log,
+    });
   }
 
   getLogs(
     id: string,
     offset = 0,
     limit = 100
-  ): { logs: BackgroundTask["logs"]; total: number; hasMore: boolean } {
+  ): { logs: BackgroundTaskLog[]; total: number; hasMore: boolean } {
     const task = this.tasks.get(id);
     if (!task) {
       return { logs: [], total: 0, hasMore: false };
     }
+
     const total = task.logs.length;
-    const logs = task.logs.slice(offset, offset + limit);
-    return { logs, total, hasMore: offset + limit < total };
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const safeLimit = Math.max(1, Math.floor(limit));
+    const logs = task.logs.slice(safeOffset, safeOffset + safeLimit);
+
+    return {
+      logs,
+      total,
+      hasMore: safeOffset + safeLimit < total,
+    };
   }
 
   cancel(id: string): { cancelled: boolean; previousStatus: BackgroundTaskStatus | null } {
@@ -108,122 +90,142 @@ export class BackgroundTaskStore implements BackgroundTaskStoreApi {
     }
 
     const previousStatus = task.status;
-    if (task.status === "running" || task.status === "pending") {
+    if (previousStatus === "pending" || previousStatus === "running") {
       task.abortController?.abort();
       task.status = "cancelled";
       task.completedAt = Date.now();
+      this.addLog(id, { type: "info", message: "Task cancelled by user" });
       return { cancelled: true, previousStatus };
     }
 
     return { cancelled: false, previousStatus };
   }
 
-  cleanup(maxAgeMs = 3600000): void {
+  cleanup(maxAgeMs = DEFAULT_TASK_RETENTION_MS): void {
     const now = Date.now();
+
     for (const [id, task] of this.tasks) {
-      if (task.completedAt && now - task.completedAt > maxAgeMs) {
+      if (!task.completedAt) {
+        continue;
+      }
+      if (now - task.completedAt > maxAgeMs) {
         this.tasks.delete(id);
       }
     }
+  }
+
+  private generateId(): string {
+    this.idCounter += 1;
+    return `bg_${Date.now()}_${this.idCounter}`;
   }
 }
 
 export function runInBackground({
   store,
+  toolCallId,
   toolName,
   toolArgs,
   executionFactory,
   timeoutMs,
-  initialLog,
-  toolCallId,
 }: RunInBackgroundOptions): BackgroundTaskResult {
   const task = store.create(toolName, toolArgs, toolCallId);
   store.update(task.id, { status: "running" });
 
-  if (initialLog) {
-    store.addLog(task.id, { type: "info", message: initialLog });
-  }
-
-  const bgPromise = (async (): Promise<BackgroundTaskWaitUntilResult> => {
+  const backgroundExecution = (async () => {
     try {
-      const executionPromise = executionFactory(
-        task.abortController?.signal,
-        (entry) => {
-          store.addLog(task.id, entry);
-        }
-      );
       const result = await executeWithTimeout(
-        () => executionPromise,
+        () =>
+          executionFactory(task.abortController?.signal, (entry) => {
+            store.addLog(task.id, entry);
+          }),
         timeoutMs,
         task.abortController?.signal
       );
 
-      if (
-        result &&
-        typeof result === "object" &&
-        result !== null
-      ) {
-        const existingLogs = store.get(task.id)?.logs ?? [];
-        const hasStdoutLog = existingLogs.some((entry) => entry.type === "stdout");
-        const hasStderrLog = existingLogs.some((entry) => entry.type === "stderr");
-        if ("stdout" in result && typeof result.stdout === "string" && result.stdout && !hasStdoutLog) {
-          store.addLog(task.id, { type: "stdout", message: result.stdout });
-        }
-        if ("stderr" in result && typeof result.stderr === "string" && result.stderr && !hasStderrLog) {
-          store.addLog(task.id, { type: "stderr", message: result.stderr });
-        }
-      }
+      writeStdIoLogs(store, task.id, result);
+      const failure = extractFailureMessage(result);
 
-      const failureMessage = extractFailureFromResult(result);
-      if (failureMessage) {
-        store.addLog(task.id, { type: "error", message: failureMessage });
+      if (failure) {
+        store.addLog(task.id, { type: "error", message: failure });
         store.update(task.id, {
           status: "failed",
           result,
-          error: failureMessage,
+          error: failure,
           completedAt: Date.now(),
         });
-
-        return {
-          taskId: task.id,
-          status: "failed",
-          logs: store.get(task.id)?.logs ?? [],
-          result,
-          error: failureMessage,
-        };
+        return;
       }
 
-      store.update(task.id, { status: "completed", result, completedAt: Date.now() });
-
-      return {
-        taskId: task.id,
+      store.update(task.id, {
         status: "completed",
-        logs: store.get(task.id)?.logs ?? [],
         result,
-      };
+        completedAt: Date.now(),
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      store.addLog(task.id, { type: "error", message: errorMessage });
-      const wasCancelled = task.abortController?.signal.aborted
-        || (error instanceof Error && error.name === "AbortError");
-      const status: BackgroundTaskStatus = wasCancelled ? "cancelled" : "failed";
-      store.update(task.id, { status, error: errorMessage, completedAt: Date.now() });
+      const cancelled = task.abortController?.signal.aborted || isAbortError(error);
+      const status: BackgroundTaskStatus = cancelled ? "cancelled" : "failed";
 
-      return {
-        taskId: task.id,
+      if (!cancelled) {
+        store.addLog(task.id, { type: "error", message: errorMessage });
+      }
+
+      store.update(task.id, {
         status,
-        logs: store.get(task.id)?.logs ?? [],
-        error: errorMessage,
-      };
+        ...(cancelled ? {} : { error: errorMessage }),
+        completedAt: Date.now(),
+      });
     }
   })();
 
-  if (store.waitUntil) {
-    store.waitUntil(bgPromise);
+  store.waitUntil(backgroundExecution);
+
+  return { backgroundTaskId: task.id };
+}
+
+function extractFailureMessage(result: unknown): string | null {
+  if (!result || typeof result !== "object") {
+    return null;
   }
 
-  return {
-    backgroundTaskId: task.id,
-    status: initialLog ? "converted_to_background" : "started",
-  };
+  const output = result as Record<string, unknown>;
+
+  if (typeof output.error === "string" && output.error.trim().length > 0) {
+    return output.error.trim();
+  }
+
+  if (output.success === false) {
+    if (typeof output.stderr === "string" && output.stderr.trim().length > 0) {
+      return output.stderr.trim();
+    }
+    if (typeof output.exitCode === "number") {
+      return `Tool execution failed with exit code ${output.exitCode}`;
+    }
+    return "Tool execution reported success: false";
+  }
+
+  return null;
+}
+
+function writeStdIoLogs(
+  store: BackgroundTaskStoreApi,
+  taskId: string,
+  result: unknown
+): void {
+  if (!result || typeof result !== "object") {
+    return;
+  }
+
+  const output = result as Record<string, unknown>;
+  const existingLogs = store.get(taskId)?.logs ?? [];
+  const hasStdout = existingLogs.some((entry) => entry.type === "stdout");
+  const hasStderr = existingLogs.some((entry) => entry.type === "stderr");
+
+  if (!hasStdout && typeof output.stdout === "string" && output.stdout.length > 0) {
+    store.addLog(taskId, { type: "stdout", message: output.stdout });
+  }
+
+  if (!hasStderr && typeof output.stderr === "string" && output.stderr.length > 0) {
+    store.addLog(taskId, { type: "stderr", message: output.stderr });
+  }
 }

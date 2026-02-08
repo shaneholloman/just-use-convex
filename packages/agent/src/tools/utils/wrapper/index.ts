@@ -1,44 +1,56 @@
 import { createTool, type BaseTool } from "@voltagent/core";
-import { runInBackground, BackgroundTaskStore } from "./background";
+import { runInBackground } from "./background";
 import { createWrappedExecute, augmentParametersSchema, isZodObjectSchema } from "./tool";
 import { isToolTimeoutError } from "./timeout";
-import { createBackgroundTaskToolkit, withBackgroundTaskTools } from "./tools";
 import type {
   BackgroundTaskStoreApi,
   BeforeFailureHook,
+  StartBackgroundTask,
   ToolCallConfig,
   WrappedToolOptions,
 } from "./types";
 
-function createTimeoutToBackgroundHook(store: BackgroundTaskStoreApi): BeforeFailureHook {
+function createStartBackgroundTask(store: BackgroundTaskStoreApi): StartBackgroundTask {
+  return ({ initialLog, ...input }) => {
+    const backgroundResult = runInBackground({ store, ...input });
+    if (typeof initialLog === "string" && initialLog.trim().length > 0) {
+      store.addLog(backgroundResult.backgroundTaskId, {
+        type: "info",
+        message: initialLog.trim(),
+      });
+    }
+    return backgroundResult;
+  };
+}
+
+function createTimeoutPromotionHook(startBackgroundTask: StartBackgroundTask): BeforeFailureHook {
   return async ({
     error,
     toolCallId,
     toolName,
     toolArgs,
     executionFactory,
-    effectiveTimeout,
     maxAllowedDuration,
   }) => {
     if (!isToolTimeoutError(error)) {
       return undefined;
     }
 
-    return runInBackground({
-      store,
+    return startBackgroundTask({
       toolCallId,
       toolName,
       toolArgs,
       executionFactory,
       timeoutMs: maxAllowedDuration,
-      initialLog: `Foreground execution timed out after ${effectiveTimeout}ms, converted to background task`,
+      initialLog: `Foreground execution timed out. Continued in background for up to ${maxAllowedDuration}ms.`,
     });
   };
 }
 
 export function createWrappedTool(options: WrappedToolOptions): BaseTool {
-  const { name, description, toolCallConfig, parameters, store, execute } = options;
+  const { name, description, parameters, toolCallConfig, store, execute } = options;
   const config = toolCallConfig ?? {};
+  const startBackgroundTask = createStartBackgroundTask(store);
 
   return createTool({
     name,
@@ -46,10 +58,10 @@ export function createWrappedTool(options: WrappedToolOptions): BaseTool {
     parameters: augmentParametersSchema(parameters.shape, config),
     execute: createWrappedExecute({
       toolName: name,
-      originalExecute: execute ?? (() => undefined),
+      execute: execute ?? (() => undefined),
       config,
-      startBackground: (input) => runInBackground({ store, ...input }),
-      beforeFailureHooks: [createTimeoutToBackgroundHook(store)],
+      startBackground: startBackgroundTask,
+      beforeFailureHooks: [createTimeoutPromotionHook(startBackgroundTask)],
     }),
   });
 }
@@ -59,16 +71,19 @@ export function patchToolWithBackgroundSupport(
   store: BackgroundTaskStoreApi,
   config: ToolCallConfig = {}
 ): void {
-  const originalExecute = tool.execute;
-  if (!originalExecute) return;
+  if (!tool.execute) {
+    return;
+  }
+
+  const startBackgroundTask = createStartBackgroundTask(store);
 
   Object.defineProperty(tool, "execute", {
     value: createWrappedExecute({
       toolName: tool.name,
-      originalExecute,
+      execute: tool.execute,
       config,
-      startBackground: (input) => runInBackground({ store, ...input }),
-      beforeFailureHooks: [createTimeoutToBackgroundHook(store)],
+      startBackground: startBackgroundTask,
+      beforeFailureHooks: [createTimeoutPromotionHook(startBackgroundTask)],
     }),
     writable: true,
     configurable: true,
@@ -83,39 +98,26 @@ export function patchToolWithBackgroundSupport(
   }
 }
 
-export {
-  BackgroundTaskStore,
-  runInBackground,
-  createBackgroundTaskToolkit,
-  withBackgroundTaskTools,
-};
-export {
-  executeWithTimeout,
-  isToolTimeoutError,
-  ToolTimeoutError,
-} from "./timeout";
-export {
-  DEFAULT_MAX_DURATION_MS,
-  createWrappedExecute,
-  augmentParametersSchema,
-} from "./tool";
+export { BackgroundTaskStore, runInBackground } from "./background";
+export { createBackgroundTaskToolkit, withBackgroundTaskTools } from "./tools";
+export { DEFAULT_MAX_DURATION_MS } from "./tool";
+export { TERMINAL_STATUSES } from "./types";
 export type {
-  BackgroundTaskStatus,
-  BackgroundTaskLogType,
-  BackgroundTaskLog,
   BackgroundTask,
+  BackgroundTaskLog,
+  BackgroundTaskLogType,
   BackgroundTaskResult,
-  BackgroundTaskWaitUntilResult,
-  ToolOrToolkit,
-  RunInBackgroundOptions,
-  ToolCallConfig,
-  WrappedExecuteOptions,
-  WrappedToolOptions,
+  BackgroundTaskStatus,
   BackgroundTaskStoreApi,
-  StartBackgroundTask,
-  StartBackgroundTaskInput,
-  ExecutionFactory,
   BeforeFailureHook,
   BeforeFailureHookContext,
+  ExecutionFactory,
+  RunInBackgroundOptions,
+  StartBackgroundTask,
+  StartBackgroundTaskInput,
+  ToolCallConfig,
+  ToolOrToolkit,
   WrappedExecuteFactoryOptions,
+  WrappedExecuteOptions,
+  WrappedToolOptions,
 } from "./types";

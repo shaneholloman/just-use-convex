@@ -12,6 +12,16 @@ export function isToolTimeoutError(error: unknown): error is ToolTimeoutError {
   return error instanceof ToolTimeoutError;
 }
 
+export function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return error.name === "AbortError";
+  }
+  if (error instanceof Error) {
+    return error.name === "AbortError";
+  }
+  return false;
+}
+
 export async function executeWithTimeout<R>(
   fn: () => R | Promise<R> | undefined,
   timeoutMs: number,
