@@ -164,6 +164,7 @@ File-based TanStack Router:
 - if you change server-side code, always verify affected client-side usage (and vice versa)
 - keep codebase DRY
 - cleanup stale code when changing methods/approach
+- keep helper functions at the bottom of the file
 - always use convex ents for convex related stuff
 - whenever implementing something for convex, analyze adjecent and relevant files for similar pattern implementation
 - whenever working with external libraries always query context7 for their relevant docs
@@ -175,6 +176,10 @@ File-based TanStack Router:
 - for Daytona sandbox backend code, avoid adding fallback/sanitization guardrails unless explicitly requested
 - chat sandbox is optional; when sandboxId is present, agent must assume sandbox already exists (no agent-side provisioning fallback)
 - for sandbox backend helper modules, prefer consolidating small shared helpers into `backend/utils.ts`
+- for sandbox agent tools, enforce one Daytona client singleton and one sandbox session per backend instance
+- initialize sandbox session eagerly in `SandboxFilesystemBackend` constructor (no get-or-create sandbox session method)
+- for Daytona LSP in sandbox tools, enforce a single active session: reuse on same language, recreate on language change
+- prioritize refactors and cleanup over backward compatibility for sandbox tool internals unless explicitly requested otherwise
 
 ## Background & Subagents
 
