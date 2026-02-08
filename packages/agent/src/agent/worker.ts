@@ -161,10 +161,6 @@ export class AgentWorker extends SandboxTerminalAgentBase<AgentArgs> {
         createAskUserToolkit(),
       ], this.backgroundTaskStore),
       planning: false,
-      toolResultEviction: {
-        enabled: true,
-        tokenLimit: 20000,
-      },
       task: {
         taskDescription: TASK_PROMPT,
         supervisorConfig: {
