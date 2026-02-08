@@ -45,10 +45,10 @@ bun check-types
 
 ### On Finish
 
-Always play `finish.mp3` when done working to notify me. This is mandatory before your final response.
+Always play `finish.wav` when done working to notify me. This is mandatory before your final response.
 Run from repo root and do not skip silently on failure.
 ```bash
-test -f finish.mp3 && paplay finish.mp3
+test -f finish.wav && paplay finish.wav
 ```
 If playback fails, explicitly report that in the final response with the command error.
 
