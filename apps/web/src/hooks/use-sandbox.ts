@@ -6,8 +6,6 @@ import type { FunctionReturnType } from "convex/server";
 import { useAction } from "convex/react";
 import { toast } from "sonner";
 import type { Terminal as XtermTerminal } from "xterm";
-import type { SandboxFilesystemBackend } from "@just-use-convex/agent/src/tools/sandbox";
-
 type ChatSshSession = FunctionReturnType<typeof api.sandboxes.nodeFunctions.createChatSshAccess>;
 type XtermTerminalWriteData = Extract<Parameters<XtermTerminal["write"]>[0], string>;
 type XtermTerminalInputData = Extract<Parameters<Parameters<XtermTerminal["onData"]>[0]>[0], string>;
@@ -26,7 +24,12 @@ export type ExplorerState = {
   entries: ExplorerEntry[];
 };
 
-export type TerminalSession = Awaited<ReturnType<SandboxFilesystemBackend["listPtySessions"]>>["sessions"][number];
+export type TerminalSession = {
+  id: string;
+  pid?: number;
+  cwd?: string;
+  isAlive?: boolean;
+};
 
 const TERMINAL_BACKGROUND = "#0b0f19";
 

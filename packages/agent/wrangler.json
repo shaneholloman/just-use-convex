@@ -9,7 +9,8 @@
   "vars": {
     "NODE_ENV": "production",
     "DAYTONA_TARGET": "us",
-    "DEFAULT_MODEL": "openai/gpt-5.2-chat"
+    "DEFAULT_MODEL": "openai/gpt-5.2-chat",
+    "MAX_BACKGROUND_DURATION_MS": "3600000"
   },
   "durable_objects": {
     "bindings": [

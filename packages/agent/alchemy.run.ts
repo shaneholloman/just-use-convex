@@ -41,6 +41,7 @@ export const worker = await Worker("agent-worker", {
     DAYTONA_API_KEY: alchemy.secret(env.DAYTONA_API_KEY),
     DAYTONA_API_URL: alchemy.secret(env.DAYTONA_API_URL),
     DEFAULT_MODEL: env.DEFAULT_MODEL,
+    MAX_BACKGROUND_DURATION_MS: String(env.MAX_BACKGROUND_DURATION_MS),
   },
   observability: {
     logs: {

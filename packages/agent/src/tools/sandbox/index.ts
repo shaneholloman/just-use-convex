@@ -1,3 +1,5 @@
+import { AIChatAgent } from "@cloudflare/ai-chat";
+import { callable } from "agents";
 import { Daytona, type Sandbox } from "@daytonaio/sdk";
 import { isFileUIPart, type UIMessage } from "ai";
 import {
@@ -11,6 +13,7 @@ import { sanitizeFilename } from "@just-use-convex/agent/src/agent/messages";
 import {
   createWrappedTool,
   type BackgroundTaskStoreApi,
+  type TruncatedOutputStoreApi,
   type WrappedExecuteOptions,
 } from "../utils/wrapper";
 import type { worker } from "@just-use-convex/agent/alchemy.run";
@@ -60,6 +63,7 @@ import {
 
 type SandboxToolkitOptions = {
   store?: BackgroundTaskStoreApi;
+  outputStore?: TruncatedOutputStoreApi;
 };
 
 const SANDBOX_TOOLKIT_INSTRUCTIONS = `You can operate directly on the chat sandbox.
@@ -78,8 +82,6 @@ const DEFAULT_TOOL_CALL_CONFIG = {
   allowAgentSetDuration: true,
   allowBackground: true,
 } as const;
-const EXEC_PROMOTED_CONTINUATION_TIMEOUT_MS = DEFAULT_TOOL_MAX_DURATION_MS;
-
 const INTERNAL_PTY_TERMINAL_ID = "__sandbox_internal__";
 const SANDBOX_UPLOADS_DIR = "workspace/uploads";
 const SANDBOX_UPLOADS_TEMP_DIR = "workspace/.tmp/uploads";
@@ -88,6 +90,7 @@ const DAYTONA_PREVIEW_TOKEN_HEADER = "x-daytona-preview-token";
 export class SandboxFilesystemBackend {
   private readonly daytona: Daytona;
   private sandboxSession: SandboxSessionState | null = null;
+  public readonly ready: Promise<void>;
 
   constructor(
     env: typeof worker.Env,
@@ -98,7 +101,7 @@ export class SandboxFilesystemBackend {
       ...(env.DAYTONA_API_URL ? { apiUrl: env.DAYTONA_API_URL } : {}),
       ...(env.DAYTONA_TARGET ? { target: env.DAYTONA_TARGET } : {}),
     });
-    this.createSandboxSession();
+    this.ready = this.createSandboxSession().then(() => undefined);
   }
 
   private async createSandboxSession(): Promise<SandboxSessionState> {
@@ -333,6 +336,7 @@ export class SandboxFilesystemBackend {
     const result = await execOnPty(sandboxSession, {
       ...input,
     }, {
+      log: options?.log,
       streamLogs: options?.streamLogs ?? options?.log,
       abortSignal: options?.toolContext?.abortSignal ?? options?.abortController?.signal,
     });
@@ -584,12 +588,13 @@ function createSandboxTool(
     ) => Promise<unknown>;
   }
 ): BaseTool {
-  if (options.store) {
+  if (options.store && options.outputStore) {
     return createWrappedTool({
       name: config.name,
       description: config.description,
       parameters: config.parameters,
       store: options.store,
+      outputStore: options.outputStore,
       toolCallConfig: DEFAULT_TOOL_CALL_CONFIG,
       execute: config.execute,
     });
@@ -695,6 +700,151 @@ export function createSandboxToolkit(
     instructions: SANDBOX_TOOLKIT_INSTRUCTIONS,
     tools,
   });
+}
+
+export abstract class SandboxTerminalAgentBase<
+  State = unknown,
+> extends AIChatAgent<typeof worker.Env, State> {
+  private terminalBackend: SandboxFilesystemBackend | null = null;
+  private terminalBackendSandboxId: string | null = null;
+
+  protected abstract initSandboxAccess(): Promise<void>;
+  protected abstract getSandboxIdForTerminal(): string | null;
+
+  private async getTerminalBackend(): Promise<SandboxFilesystemBackend> {
+    await this.initSandboxAccess();
+    const sandboxId = this.getSandboxIdForTerminal();
+    if (!sandboxId) {
+      throw new Error("No sandbox attached to this chat");
+    }
+
+    if (this.terminalBackend && this.terminalBackendSandboxId === sandboxId) {
+      return this.terminalBackend;
+    }
+
+    if (this.terminalBackend) {
+      await this.terminalBackend.closeSandboxSession().catch(() => undefined);
+    }
+
+    const backend = new SandboxFilesystemBackend(this.env, sandboxId);
+    await backend.ready;
+    this.terminalBackend = backend;
+    this.terminalBackendSandboxId = sandboxId;
+    return this.terminalBackend;
+  }
+
+  @callable()
+  async listFiles(input?: { path?: string }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.listFiles({
+      path: input?.path ?? ".",
+    });
+  }
+
+  @callable()
+  async openPtyTerminal(input?: {
+    terminalId?: string;
+    cols?: number;
+    rows?: number;
+    cwd?: string;
+    envs?: Record<string, string>;
+  }) {
+    const backend = await this.getTerminalBackend();
+    const response = await backend.openPtySession({
+      terminalId: input?.terminalId,
+      cols: input?.cols,
+      rows: input?.rows,
+      cwd: input?.cwd,
+      envs: input?.envs,
+    });
+    return { terminalId: response.terminalId };
+  }
+
+  @callable()
+  async readPtyTerminal(input: {
+    terminalId: string;
+    offset?: number;
+    cols?: number;
+    rows?: number;
+    cwd?: string;
+    envs?: Record<string, string>;
+  }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.readPtySession({
+      terminalId: input.terminalId,
+      offset: input.offset ?? 0,
+      cols: input.cols,
+      rows: input.rows,
+      cwd: input.cwd,
+      envs: input.envs,
+    });
+  }
+
+  @callable()
+  async writePtyTerminal(input: {
+    terminalId: string;
+    data: string;
+    cols?: number;
+    rows?: number;
+    cwd?: string;
+    envs?: Record<string, string>;
+  }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.writePtySession({
+      terminalId: input.terminalId,
+      data: input.data,
+      cols: input.cols,
+      rows: input.rows,
+      cwd: input.cwd,
+      envs: input.envs,
+    });
+  }
+
+  @callable()
+  async resizePtyTerminal(input: {
+    terminalId: string;
+    cols: number;
+    rows: number;
+  }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.resizePtySession({
+      terminalId: input.terminalId,
+      cols: input.cols,
+      rows: input.rows,
+    });
+  }
+
+  @callable()
+  async listPtyTerminalSessions() {
+    const backend = await this.getTerminalBackend();
+    return await backend.listPtySessions();
+  }
+
+  @callable()
+  async closePtyTerminal(input: { terminalId: string }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.closePtySession({
+      terminalId: input.terminalId,
+    });
+  }
+
+  @callable()
+  async downloadFile(input: { path: string }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.downloadFileBase64({ path: input.path });
+  }
+
+  @callable()
+  async downloadFolder(input: { path: string }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.downloadFolderArchive({ path: input.path });
+  }
+
+  @callable()
+  async deleteEntry(input: { path: string }) {
+    const backend = await this.getTerminalBackend();
+    return await backend.deleteEntry({ path: input.path });
+  }
 }
 
 function parseModTime(modTime: string): number {

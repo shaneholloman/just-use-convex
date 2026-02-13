@@ -1,20 +1,28 @@
 import type { BaseTool, ToolExecuteOptions, Toolkit } from "@voltagent/core";
 import type { ZodObject, ZodRawShape } from "zod";
 
+// ── Constants ──────────────────────────────────────────────────────────
+
+export const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000;
+export const DEFAULT_MAX_BACKGROUND_DURATION_MS = 60 * 60 * 1000; // 1 hour
+export const DEFAULT_MAX_OUTPUT_TOKENS = 32_000;
+export const DEFAULT_TASK_RETENTION_MS = 60 * 60 * 1000;
+export const OUTPUT_CHARS_PER_TOKEN = 4;
+
+export const TERMINAL_STATUSES: readonly BackgroundTaskStatus[] = [
+  "completed",
+  "failed",
+  "cancelled",
+];
+
+// ── Background Task ────────────────────────────────────────────────────
+
 export type BackgroundTaskStatus =
   | "pending"
   | "running"
   | "completed"
   | "failed"
   | "cancelled";
-
-export type BackgroundTaskLogType = "stdout" | "stderr" | "info" | "error";
-
-export type BackgroundTaskLog = {
-  timestamp: number;
-  type: BackgroundTaskLogType;
-  message: string;
-};
 
 export type BackgroundTask = {
   id: string;
@@ -26,39 +34,11 @@ export type BackgroundTask = {
   completedAt?: number;
   result?: unknown;
   error?: string;
-  logs: BackgroundTaskLog[];
   abortController?: AbortController;
 };
 
-export type ToolOutputLog = {
-  id: string;
-  toolCallId: string;
-  toolName: string;
-  content: string;
-  createdAt: number;
-};
-
-export type ToolOutputLogCreateInput = {
-  toolCallId: string;
-  toolName: string;
-  content: string;
-};
-
-export type ToolOutputLogCreateResult = {
-  logId: string;
-  size: number;
-  totalLines: number;
-};
-
-export type ToolOutputLogReadResult = {
-  logId: string;
-  content: string;
-  size: number;
-  totalLines: number;
-  offset: number;
-  lines: number;
-  hasMore: boolean;
-  nextOffset: number;
+export type BackgroundTaskResult = {
+  backgroundTaskId: string;
 };
 
 export interface BackgroundTaskStoreApi {
@@ -67,18 +47,6 @@ export interface BackgroundTaskStoreApi {
   get(id: string): BackgroundTask | undefined;
   getAll(): BackgroundTask[];
   update(id: string, updates: Partial<BackgroundTask>): void;
-  addLog(id: string, log: Omit<BackgroundTaskLog, "timestamp">): void;
-  getLogs(
-    id: string,
-    offset?: number,
-    limit?: number
-  ): { logs: BackgroundTaskLog[]; total: number; hasMore: boolean };
-  createOutputLog(input: ToolOutputLogCreateInput): ToolOutputLogCreateResult;
-  readOutputLog(
-    id: string,
-    offset?: number,
-    lines?: number
-  ): ToolOutputLogReadResult | undefined;
   cancel(id: string): {
     cancelled: boolean;
     previousStatus: BackgroundTaskStatus | null;
@@ -86,14 +54,16 @@ export interface BackgroundTaskStoreApi {
   };
 }
 
-export type BackgroundTaskResult = {
-  backgroundTaskId: string;
-};
+// ── Execution ──────────────────────────────────────────────────────────
 
 export type ExecutionFactory = (
   abortSignal?: AbortSignal,
-  streamLogs?: (entry: { type: BackgroundTaskLogType; message: string }) => void
 ) => Promise<unknown> | unknown;
+
+export type ToolExecuteFn = (
+  args: Record<string, unknown>,
+  opts?: ToolExecuteOptions,
+) => unknown | Promise<unknown>;
 
 export type RunInBackgroundOptions = {
   store: BackgroundTaskStoreApi;
@@ -104,16 +74,21 @@ export type RunInBackgroundOptions = {
   timeoutMs: number;
 };
 
-export const TERMINAL_STATUSES: readonly BackgroundTaskStatus[] = [
-  "completed",
-  "failed",
-  "cancelled",
-];
+export type StartBackgroundTaskInput = {
+  toolCallId: string;
+  toolName: string;
+  toolArgs: Record<string, unknown>;
+  executionFactory: ExecutionFactory;
+  timeoutMs: number;
+};
 
-export type ToolOrToolkit = BaseTool | Toolkit;
+export type StartBackgroundTask = (input: StartBackgroundTaskInput) => unknown;
+
+// ── Tool Config ────────────────────────────────────────────────────────
 
 export type ToolCallConfig = {
   maxDuration?: number;
+  maxBackgroundDuration?: number;
   allowAgentSetDuration?: boolean;
   allowBackground?: boolean;
   maxOutputTokens?: number;
@@ -121,32 +96,19 @@ export type ToolCallConfig = {
 
 export type WrappedExecuteOptions = ToolExecuteOptions & {
   timeout?: number;
-  streamLogs?: (entry: { type: BackgroundTaskLogType; message: string }) => void;
-  log?: (entry: { type: BackgroundTaskLogType; message: string }) => void;
 };
 
-export type WrappedToolOptions = {
-  name: string;
-  description: string;
-  parameters: ZodObject<ZodRawShape>;
-  toolCallConfig?: ToolCallConfig;
-  store: BackgroundTaskStoreApi;
-  execute?: (
-    args: Record<string, unknown>,
-    options?: WrappedExecuteOptions
-  ) => unknown | Promise<unknown>;
-};
+// ── Hooks ──────────────────────────────────────────────────────────────
 
-export type StartBackgroundTaskInput = {
+export type PostExecuteContext = {
+  result: unknown;
   toolCallId: string;
   toolName: string;
   toolArgs: Record<string, unknown>;
-  executionFactory: ExecutionFactory;
-  timeoutMs: number;
-  initialLog?: string;
+  maxOutputTokens: number;
 };
 
-export type StartBackgroundTask = (input: StartBackgroundTaskInput) => unknown;
+export type PostExecuteHook = (context: PostExecuteContext) => Promise<unknown> | unknown;
 
 export type BeforeFailureHookContext = {
   error: unknown;
@@ -157,26 +119,56 @@ export type BeforeFailureHookContext = {
   config: ToolCallConfig;
   effectiveTimeout: number;
   maxAllowedDuration: number;
+  maxBackgroundDuration: number;
   executionFactory: ExecutionFactory;
   executionPromise: Promise<unknown>;
 };
 
 export type BeforeFailureHook = (
-  context: BeforeFailureHookContext
+  context: BeforeFailureHookContext,
 ) => Promise<unknown | undefined> | unknown | undefined;
+
+// ── Factory Options ────────────────────────────────────────────────────
 
 export type WrappedExecuteFactoryOptions = {
   toolName: string;
-  execute: (args: Record<string, unknown>, opts?: ToolExecuteOptions) => unknown | Promise<unknown>;
+  execute: ToolExecuteFn;
   config: ToolCallConfig;
-  postExecute?: (
-    context: {
-      result: unknown;
-      toolCallId: string;
-      toolName: string;
-      toolArgs: Record<string, unknown>;
-      maxOutputTokens: number;
-    }
-  ) => Promise<unknown> | unknown;
+  startBackground?: StartBackgroundTask;
+  postExecute?: PostExecuteHook;
   beforeFailureHooks?: BeforeFailureHook[];
 };
+
+export type WrappedToolOptions = {
+  name: string;
+  description: string;
+  parameters: ZodObject<ZodRawShape>;
+  toolCallConfig?: ToolCallConfig;
+  store: BackgroundTaskStoreApi;
+  outputStore: TruncatedOutputStoreApi;
+  execute?: (
+    args: Record<string, unknown>,
+    options?: WrappedExecuteOptions,
+  ) => unknown | Promise<unknown>;
+};
+
+// ── Truncated Output ──────────────────────────────────────────────────
+
+export type TruncatedOutput = {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  content: string;
+  createdAt: number;
+};
+
+export interface TruncatedOutputStoreApi {
+  store(content: string, meta: { toolCallId: string; toolName: string }): string;
+  get(id: string): TruncatedOutput | undefined;
+  getAll(): TruncatedOutput[];
+  cleanup(maxAgeMs?: number): void;
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────
+
+export type ToolOrToolkit = BaseTool | Toolkit;

@@ -1,19 +1,111 @@
 import type { BaseTool, ToolExecuteOptions } from "@voltagent/core";
 import { z, type ZodObject, type ZodRawShape } from "zod";
 import { executeWithTimeout, isToolTimeoutError } from "./timeout";
+import {
+  DEFAULT_MAX_DURATION_MS,
+  DEFAULT_MAX_BACKGROUND_DURATION_MS,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+} from "./types";
 import type {
-  StartBackgroundTask,
   ToolCallConfig,
   WrappedExecuteFactoryOptions,
   WrappedExecuteOptions,
 } from "./types";
 
-export const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000;
-export const DEFAULT_MAX_OUTPUT_TOKENS = 32_000;
+// ── Public ─────────────────────────────────────────────────────────────
+
+export function createWrappedExecute({
+  toolName,
+  execute,
+  config,
+  postExecute,
+  beforeFailureHooks = [],
+  startBackground,
+}: WrappedExecuteFactoryOptions) {
+  return async (
+    rawArgs: Record<string, unknown>,
+    options?: ToolExecuteOptions,
+  ): Promise<unknown> => {
+    const {
+      toolArgs,
+      shouldRunInBackground,
+      maxAllowedDuration,
+      maxBackgroundDuration,
+      effectiveTimeout,
+      effectiveBackgroundTimeout,
+      effectiveMaxOutputTokens,
+    } = splitToolArgs(rawArgs, config);
+
+    const toolCallId = resolveToolCallId(options);
+    const session = createExecutionSession({
+      execute: async (args, executeOptions) => {
+        const result = await execute(args, executeOptions);
+        if (!postExecute) return result;
+        return await postExecute({
+          result,
+          toolCallId,
+          toolName,
+          toolArgs,
+          maxOutputTokens: effectiveMaxOutputTokens,
+        });
+      },
+      toolArgs,
+      options,
+      executionTimeoutMs: effectiveTimeout,
+    });
+
+    if (shouldRunInBackground) {
+      if (!startBackground) {
+        throw new Error(`Background execution is not configured for tool "${toolName}"`);
+      }
+      return startBackground({
+        toolCallId,
+        toolName,
+        toolArgs,
+        executionFactory: session.executionFactory,
+        timeoutMs: effectiveBackgroundTimeout,
+      });
+    }
+
+    const executionPromise = session.startForeground();
+
+    try {
+      return await executeWithTimeout(
+        () => executionPromise,
+        effectiveTimeout,
+        session.getAbortSignal(),
+      );
+    } catch (error) {
+      if (isToolTimeoutError(error)) {
+        session.detachRequestAbortLinks();
+      }
+
+      for (const hook of beforeFailureHooks) {
+        const hookResult = await hook({
+          error,
+          options,
+          toolCallId,
+          toolName,
+          toolArgs,
+          config,
+          effectiveTimeout,
+          maxAllowedDuration,
+          maxBackgroundDuration,
+          executionFactory: session.executionFactory,
+          executionPromise,
+        });
+
+        if (hookResult !== undefined) return hookResult;
+      }
+
+      throw error;
+    }
+  };
+}
 
 export function augmentParametersSchema(
   shape: ZodRawShape,
-  config: ToolCallConfig
+  config: ToolCallConfig,
 ): ZodObject<ZodRawShape> {
   const nextShape: ZodRawShape = { ...shape };
 
@@ -36,103 +128,13 @@ export function augmentParametersSchema(
   return z.object(nextShape);
 }
 
-export function createWrappedExecute({
-  toolName,
-  execute,
-  config,
-  postExecute,
-  beforeFailureHooks = [],
-  startBackground,
-}: WrappedExecuteFactoryOptions & { startBackground?: StartBackgroundTask }) {
-  return async (
-    rawArgs: Record<string, unknown>,
-    options?: ToolExecuteOptions
-  ): Promise<unknown> => {
-    const {
-      toolArgs,
-      shouldRunInBackground,
-      maxAllowedDuration,
-      effectiveTimeout,
-      effectiveMaxOutputTokens,
-    } = splitToolArgs(rawArgs, config);
-
-    const toolCallId = resolveToolCallId(options);
-    const execution = createExecutionSession({
-      execute: async (args, executeOptions) => {
-        const result = await execute(args, executeOptions);
-        if (!postExecute) {
-          return result;
-        }
-        return await postExecute({
-          result,
-          toolCallId,
-          toolName,
-          toolArgs,
-          maxOutputTokens: effectiveMaxOutputTokens,
-        });
-      },
-      toolArgs,
-      options,
-      executionTimeoutMs: effectiveTimeout,
-    });
-
-    if (shouldRunInBackground) {
-      if (!startBackground) {
-        throw new Error(`Background execution is not configured for tool "${toolName}"`);
-      }
-
-      return startBackground({
-        toolCallId,
-        toolName,
-        toolArgs,
-        executionFactory: execution.executionFactory,
-        timeoutMs: effectiveTimeout,
-        initialLog: `Background execution started for ${toolName}.`,
-      });
-    }
-
-    const executionPromise = execution.startForeground();
-
-    try {
-      return await executeWithTimeout(
-        () => executionPromise,
-        effectiveTimeout,
-        execution.getAbortSignal()
-      );
-    } catch (error) {
-      if (isToolTimeoutError(error)) {
-        execution.detachRequestAbortLinks();
-      }
-
-      for (const hook of beforeFailureHooks) {
-        const hookResult = await hook({
-          error,
-          options,
-          toolCallId,
-          toolName,
-          toolArgs,
-          config,
-          effectiveTimeout,
-          maxAllowedDuration,
-          executionFactory: execution.executionFactory,
-          executionPromise,
-        });
-
-        if (hookResult !== undefined) {
-          return hookResult;
-        }
-      }
-
-      throw error;
-    }
-  };
-}
-
 export function isZodObjectSchema(
-  schema: BaseTool["parameters"]
+  schema: BaseTool["parameters"],
 ): schema is ZodObject<ZodRawShape> {
   return Boolean(schema && typeof schema === "object" && "shape" in schema);
 }
+
+// ── Internals ──────────────────────────────────────────────────────────
 
 function createExecutionSession({
   execute,
@@ -144,48 +146,14 @@ function createExecutionSession({
   options?: ToolExecuteOptions;
   executionTimeoutMs: number;
 }) {
-  type LogSink = NonNullable<WrappedExecuteOptions["streamLogs"]>;
-  type LogEntry = Parameters<LogSink>[0];
-
-  const logHistory: LogEntry[] = [];
-  const logSinks = new Set<LogSink>();
   const requestAbortUnsubscribers: Array<() => void> = [];
-
   let abortController: AbortController | undefined;
   let executionPromise: Promise<unknown> | undefined;
-
-  const emitLog: LogSink = (entry) => {
-    logHistory.push(entry);
-    for (const sink of logSinks) {
-      try {
-        sink(entry);
-      } catch {
-        // Ignore log sink errors so tools are never interrupted by logging failures.
-      }
-    }
-  };
-
-  const registerLogSink = (sink?: LogSink) => {
-    if (!sink) {
-      return;
-    }
-    logSinks.add(sink);
-    for (const historicalEntry of logHistory) {
-      try {
-        sink(historicalEntry);
-      } catch {
-        // Ignore sink replay errors.
-      }
-    }
-  };
 
   const startExecution = (
     mode: "foreground" | "background",
     backgroundSignal?: AbortSignal,
-    streamLogs?: LogSink
   ): Promise<unknown> => {
-    registerLogSink(streamLogs);
-
     if (executionPromise) {
       if (backgroundSignal && abortController) {
         linkAbortSignal(backgroundSignal, abortController);
@@ -196,30 +164,18 @@ function createExecutionSession({
     abortController = new AbortController();
 
     if (mode === "foreground") {
-      const requestAbortSignal = options?.abortController?.signal;
-      const toolContextAbortSignal = options?.toolContext?.abortSignal;
+      const requestCleanup = linkAbortSignal(options?.abortController?.signal, abortController);
+      if (requestCleanup) requestAbortUnsubscribers.push(requestCleanup);
 
-      const requestAbortCleanup = linkAbortSignal(requestAbortSignal, abortController);
-      if (requestAbortCleanup) {
-        requestAbortUnsubscribers.push(requestAbortCleanup);
-      }
-
-      const toolContextCleanup = linkAbortSignal(toolContextAbortSignal, abortController);
-      if (toolContextCleanup) {
-        requestAbortUnsubscribers.push(toolContextCleanup);
-      }
+      const contextCleanup = linkAbortSignal(options?.toolContext?.abortSignal, abortController);
+      if (contextCleanup) requestAbortUnsubscribers.push(contextCleanup);
     }
 
     if (backgroundSignal) {
       linkAbortSignal(backgroundSignal, abortController);
     }
 
-    const wrappedOptions = buildWrappedExecuteOptions(
-      options,
-      abortController,
-      emitLog,
-      executionTimeoutMs
-    );
+    const wrappedOptions = buildWrappedExecuteOptions(options, abortController, executionTimeoutMs);
     executionPromise = Promise.resolve(execute(toolArgs, wrappedOptions));
     return executionPromise;
   };
@@ -227,12 +183,10 @@ function createExecutionSession({
   return {
     startForeground: () => startExecution("foreground"),
     getAbortSignal: (): AbortSignal | undefined => abortController?.signal,
-    executionFactory: (abortSignal?: AbortSignal, streamLogs?: LogSink) =>
-      startExecution("background", abortSignal, streamLogs),
+    executionFactory: (abortSignal?: AbortSignal) => startExecution("background", abortSignal),
     detachRequestAbortLinks: () => {
       while (requestAbortUnsubscribers.length > 0) {
-        const unsubscribe = requestAbortUnsubscribers.pop();
-        unsubscribe?.();
+        requestAbortUnsubscribers.pop()?.();
       }
     },
   };
@@ -240,15 +194,12 @@ function createExecutionSession({
 
 function splitToolArgs(args: Record<string, unknown>, config: ToolCallConfig) {
   const toolArgs: Record<string, unknown> = { ...args };
-
   let requestedTimeout: number | undefined;
   let shouldRunInBackground = false;
 
   if (config.allowAgentSetDuration) {
     const timeout = normalizeDuration(args.timeout);
-    const timeoutMs = timeout === undefined
-      ? normalizeDuration(args.timeoutMs)
-      : undefined;
+    const timeoutMs = timeout === undefined ? normalizeDuration(args.timeoutMs) : undefined;
     const resolvedTimeout = timeout ?? timeoutMs;
 
     if (resolvedTimeout !== undefined) {
@@ -264,42 +215,33 @@ function splitToolArgs(args: Record<string, unknown>, config: ToolCallConfig) {
 
   const maxAllowedDuration =
     normalizeDuration(config.maxDuration, DEFAULT_MAX_DURATION_MS) ?? DEFAULT_MAX_DURATION_MS;
+  const maxBackgroundDuration =
+    normalizeDuration(config.maxBackgroundDuration, DEFAULT_MAX_BACKGROUND_DURATION_MS) ?? DEFAULT_MAX_BACKGROUND_DURATION_MS;
   const effectiveTimeout =
     requestedTimeout !== undefined
       ? Math.min(requestedTimeout, maxAllowedDuration)
       : maxAllowedDuration;
+  const effectiveBackgroundTimeout = maxBackgroundDuration ?? DEFAULT_MAX_BACKGROUND_DURATION_MS;
   const effectiveMaxOutputTokens =
     normalizeTokenCount(config.maxOutputTokens, DEFAULT_MAX_OUTPUT_TOKENS) ??
     DEFAULT_MAX_OUTPUT_TOKENS;
 
-  return {
-    toolArgs,
-    shouldRunInBackground,
-    maxAllowedDuration,
-    effectiveTimeout,
-    effectiveMaxOutputTokens,
-  };
+  return { toolArgs, shouldRunInBackground, maxAllowedDuration, maxBackgroundDuration, effectiveTimeout, effectiveBackgroundTimeout, effectiveMaxOutputTokens };
 }
 
 function resolveToolCallId(options?: ToolExecuteOptions): string {
   const callId = options?.toolContext?.callId;
-  if (typeof callId === "string" && callId.trim().length > 0) {
-    return callId;
-  }
-  return `tool_${Date.now()}`;
+  return typeof callId === "string" && callId.trim().length > 0 ? callId : `tool_${Date.now()}`;
 }
 
 function buildWrappedExecuteOptions(
   options: ToolExecuteOptions | undefined,
   abortController: AbortController,
-  emitLog: NonNullable<WrappedExecuteOptions["streamLogs"]>,
-  timeoutMs: number
+  timeoutMs: number,
 ): WrappedExecuteOptions {
   const wrappedOptions: WrappedExecuteOptions = {
     ...(options ?? {}),
     abortController,
-    streamLogs: emitLog,
-    log: emitLog,
     timeout: timeoutMs,
   };
 
@@ -315,18 +257,12 @@ function buildWrappedExecuteOptions(
 
 function linkAbortSignal(
   sourceSignal: AbortSignal | undefined,
-  targetController: AbortController
+  targetController: AbortController,
 ): (() => void) | undefined {
-  if (!sourceSignal || sourceSignal === targetController.signal) {
-    return undefined;
-  }
+  if (!sourceSignal || sourceSignal === targetController.signal) return undefined;
 
   const abortTarget = () => {
-    try {
-      targetController.abort();
-    } catch {
-      // Ignore repeated abort calls.
-    }
+    try { targetController.abort(); } catch { /* repeated abort */ }
   };
 
   if (sourceSignal.aborted) {
@@ -335,21 +271,15 @@ function linkAbortSignal(
   }
 
   sourceSignal.addEventListener("abort", abortTarget, { once: true });
-  return () => {
-    sourceSignal.removeEventListener("abort", abortTarget);
-  };
+  return () => sourceSignal.removeEventListener("abort", abortTarget);
 }
 
 function normalizeDuration(value: unknown, fallback?: number): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.max(0, Math.floor(value));
 }
 
 function normalizeTokenCount(value: unknown, fallback?: number): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return fallback;
-  }
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.max(1, Math.floor(value));
 }

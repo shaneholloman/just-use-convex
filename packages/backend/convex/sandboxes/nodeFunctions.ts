@@ -32,6 +32,35 @@ function getDaytonaClient() {
   return daytonaClient;
 }
 
+async function ensureSandboxStarted(sandbox: Awaited<ReturnType<Daytona["get"]>>) {
+  const state = sandbox.state;
+  if (state === "started") return;
+  if (state === "starting") {
+    await sandbox.waitUntilStarted();
+    return;
+  }
+  if (state === "stopping" || state === "creating" || state === "restoring") {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await sandbox.refreshData();
+    return ensureSandboxStarted(sandbox);
+  }
+  if (state === "error" || state === "build_failed") {
+    if (sandbox.recoverable) {
+      await sandbox.recover();
+      await sandbox.waitUntilStarted();
+      return;
+    }
+    throw new Error(
+      `Sandbox is in an unrecoverable ${state} state${sandbox.errorReason ? `: ${sandbox.errorReason}` : ""}`
+    );
+  }
+  if (state === "destroyed" || state === "destroying" || state === "archived") {
+    throw new Error(`Sandbox is ${state} and cannot be started`);
+  }
+  await sandbox.start();
+  await sandbox.waitUntilStarted();
+}
+
 function normalizeModTime(value: unknown): number | undefined {
   if (typeof value === "number") {
     return value;
@@ -156,8 +185,7 @@ async function createChatSshAccessFunction(ctx: zActionCtx, args: z.infer<typeof
 
   const daytona = getDaytonaClient();
   const sandbox = await daytona.get(chat.sandboxId);
-  await sandbox.start();
-  await sandbox.waitUntilStarted();
+  await ensureSandboxStarted(sandbox);
   const expiresInMinutes = args.expiresInMinutes ?? 2;
 
   const sshAccess = await sandbox.createSshAccess(expiresInMinutes);
@@ -196,8 +224,7 @@ async function createChatPreviewAccessFunction(ctx: zActionCtx, args: z.infer<ty
 
   const daytona = getDaytonaClient();
   const sandbox = await daytona.get(chat.sandboxId);
-  await sandbox.start();
-  await sandbox.waitUntilStarted();
+  await ensureSandboxStarted(sandbox);
 
   const [previewLink, signedPreviewLink] = await Promise.all([
     sandbox.getPreviewLink(args.previewPort),

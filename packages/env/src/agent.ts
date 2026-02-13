@@ -13,6 +13,7 @@ export const env = createEnv({
     DEFAULT_MODEL: z.string().default("openai/gpt-5.2-chat"),
     EXA_API_KEY: z.string().default(""),
     EXTERNAL_TOKEN: z.string().default("meow"),
+    MAX_BACKGROUND_DURATION_MS: z.coerce.number().default(3_600_000),
     OPENROUTER_API_KEY: z.string().min(1),
     SITE_URL: z.url().default("http://localhost:3001"),
     VOLTAGENT_PUBLIC_KEY: z.string().default(""),

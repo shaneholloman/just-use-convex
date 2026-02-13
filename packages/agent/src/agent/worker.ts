@@ -1,5 +1,5 @@
 import { type Connection, type ConnectionContext, callable } from "agents";
-import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
+import { type OnChatMessageOptions } from "@cloudflare/ai-chat";
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -29,12 +29,14 @@ import { SYSTEM_PROMPT, TASK_PROMPT } from "../prompt";
 import { createAskUserToolkit } from "../tools/ask-user";
 import {
   SandboxFilesystemBackend,
+  SandboxTerminalAgentBase,
   createSandboxToolkit,
 } from "../tools/sandbox";
 import { createWebSearchToolkit } from "../tools/websearch";
 import { parseStreamToUI } from "../utils/fullStreamParser";
 import {
   BackgroundTaskStore,
+  TruncatedOutputStore,
   patchToolWithBackgroundSupport,
   withBackgroundTaskTools,
 } from "../tools/utils/wrapper";
@@ -46,16 +48,14 @@ import {
   deleteMessageVectors,
   indexMessagesInVectorStore,
 } from "./vectorize";
-import { createVectorizeToolkit } from "../tools/vectorize";
-import { SandboxTerminal } from "./sandbox-terminal";
-import type { worker } from "@just-use-convex/agent/alchemy.run";
 
-export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
+export class AgentWorker extends SandboxTerminalAgentBase<AgentArgs> {
   private convexAdapter: ConvexAdapter | null = null;
   private planAgent: PlanAgent | null = null;
   private sandboxId: string | null = null;
   private sandboxBackend: SandboxFilesystemBackend | null = null;
   private backgroundTaskStore = new BackgroundTaskStore(this.ctx.waitUntil.bind(this.ctx));
+  private truncatedOutputStore = new TruncatedOutputStore();
   private chatDoc: FunctionReturnType<typeof api.chats.index.get> | null = null;
 
   private async _init(args?: AgentArgs): Promise<void> {
@@ -105,9 +105,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       this.chatDoc = chat;
       if (chat.sandbox) {
         this.sandboxId = chat.sandbox._id;
-        this.sandboxBackend = new SandboxFilesystemBackend(this.env, this.sandboxId);
-        const terminal = new SandboxTerminal(async () => this.sandboxBackend!);
-        this._attachRoutes(terminal);
       }
     }
 
@@ -134,12 +131,17 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       );
     }
 
+    const filesystemBackend = this.sandboxId && this.env.DAYTONA_API_KEY
+      ? new SandboxFilesystemBackend(this.env, this.sandboxId)
+      : undefined;
+    this.sandboxBackend = filesystemBackend ?? null;
+
     const subagents = [
-      ...(this.sandboxBackend ? [
-        createSandboxToolkit(this.sandboxBackend, {
+      ...(filesystemBackend ? [
+        createSandboxToolkit(filesystemBackend, {
           store: this.backgroundTaskStore,
+          outputStore: this.truncatedOutputStore,
         }),
-        createVectorizeToolkit(this.env, this.chatDoc?.memberId),
       ].map((toolkit) =>
         new Agent({
           name: toolkit.name,
@@ -158,10 +160,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       tools: withBackgroundTaskTools([
         createWebSearchToolkit(),
         createAskUserToolkit(),
-        ...(this.sandboxBackend ? [createSandboxToolkit(this.sandboxBackend, {
-          store: this.backgroundTaskStore,
-        })] : []),
-      ], this.backgroundTaskStore),
+      ], this.backgroundTaskStore, this.truncatedOutputStore),
       planning: false,
       task: {
         taskDescription: TASK_PROMPT,
@@ -183,7 +182,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
           },
         },
       },
-      // subagents,
+      subagents,
       filesystem: false,
       maxSteps: 100,
       ...(this.env.VOLTAGENT_PUBLIC_KEY && this.env.VOLTAGENT_SECRET_KEY ? {
@@ -232,8 +231,9 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
 
     const tasks = agent.getTools().find((t) => t.name === "task");
     if (tasks) {
-      patchToolWithBackgroundSupport(tasks, this.backgroundTaskStore, {
+      patchToolWithBackgroundSupport(tasks, this.backgroundTaskStore, this.truncatedOutputStore, {
         maxDuration: 30 * 60 * 1000,
+        maxBackgroundDuration: Number(this.env.MAX_BACKGROUND_DURATION_MS) || undefined,
         allowAgentSetDuration: true,
         allowBackground: true,
       });
@@ -327,6 +327,14 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     await this.persistMessages(messages);
   }
 
+  protected async initSandboxAccess(): Promise<void> {
+    await this._init();
+  }
+
+  protected getSandboxIdForTerminal(): string | null {
+    return this.sandboxId;
+  }
+
   override async onChatMessage(
     _onFinish: StreamTextOnFinishCallback<ToolSet>,
     options?: OnChatMessageOptions
@@ -362,15 +370,14 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         }
       }
 
-      const messagesForSandbox = this.messages;
+      if (this.sandboxBackend) {
+        void this.sandboxBackend.saveFilesToSandbox(this.messages).catch(() => {});
+      }
+
       const messagesForAgent = filterMessageParts(
         this.messages,
         this.state.inputModalities
       );
-
-      if (this.sandboxBackend) {
-        void this.sandboxBackend.saveFilesToSandbox(messagesForSandbox).catch(() => {});
-      }
 
       const lastUserIdx = messagesForAgent.findLastIndex((m) => m.role === "user");
       const retrievalMessage = lastUserIdx !== -1
@@ -401,23 +408,4 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     }
   }
 
-  private _attachRoutes<T extends object>(instance: T): void {
-    const methodNames = Object.getOwnPropertyNames(instance.constructor.prototype)
-      .filter((name) => name !== "constructor") as Array<keyof T>;
-
-    for (const methodName of methodNames) {
-      const method = instance[methodName];
-      if (typeof method !== "function") {
-        continue;
-      }
-
-      const bound = method.bind(instance);
-      callable()(bound as (this: unknown, ...args: unknown[]) => unknown, {} as ClassMethodDecoratorContext);
-      Object.defineProperty(this, methodName, {
-        value: bound,
-        writable: false,
-        configurable: true,
-      });
-    }
-  }
 }

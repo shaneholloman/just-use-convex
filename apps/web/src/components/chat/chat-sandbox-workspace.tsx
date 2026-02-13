@@ -1,6 +1,6 @@
 import { Fragment, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DownloadIcon, FileIcon, FolderIcon, LaptopIcon, PlusIcon, RefreshCw, Trash2Icon } from "lucide-react";
-import type { ChatSshSessionState, ChatExplorerState, ChatTerminalSessionsState } from "@/hooks/use-sandbox";
+import type { ChatSshSessionState, ChatExplorerState, ChatTerminalSessionsState, TerminalSession } from "@/hooks/use-sandbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -112,15 +112,9 @@ export function ChatSandboxWorkspace({
       ...terminalSessions,
       {
         id: activeTerminalId,
-        active: false,
-        cols: 0,
-        rows: 0,
+        isAlive: false,
         cwd: "",
-        createdAt: "",
-        localTracked: false,
-        localClosed: false,
-        localCloseReason: null,
-      },
+      } satisfies TerminalSession,
     ];
   }, [activeTerminalId, terminalSessions]);
 
@@ -236,7 +230,7 @@ export function ChatSandboxWorkspace({
                           className="flex items-center justify-between gap-4"
                         >
                           <span className="truncate text-sm">
-                            {formatSessionLabel(session.id, session.active)}
+                            {formatSessionLabel(session.id, session.isAlive ?? false)}
                             {isCurrentSession ? " (current)" : ""}
                           </span>
                           <Button
