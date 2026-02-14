@@ -37,6 +37,22 @@ export function filterMessageParts(messages: UIMessage[], inputModalities?: stri
   }));
 }
 
+function getToolNameFromPartType(type: string): string | null {
+  if (!type.startsWith("tool-")) return null;
+  return type.slice(5);
+}
+
+export function sanitizeMessagesForAgent(messages: UIMessage[]): UIMessage[] {
+  return messages.map((msg) => ({
+    ...msg,
+    parts: msg.parts.filter((part) => {
+      const toolName = "type" in part ? getToolNameFromPartType(part.type as string) : null;
+      if (toolName == null) return true;
+      return !toolName.includes("sub-");
+    }),
+  }));
+}
+
 export function sanitizeFilename(filename: string): string {
   const base = filename.split(/[\\/]/).pop() ?? "file";
   const sanitized = base.replace(/[\u0000-\u001F\u007F]/g, "_").trim();

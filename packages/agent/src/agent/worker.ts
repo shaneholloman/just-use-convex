@@ -41,7 +41,7 @@ import {
   withBackgroundTaskTools,
 } from "../tools/utils/wrapper";
 import { generateTitle } from "./chat-meta";
-import { extractMessageText, filterMessageParts } from "./messages";
+import { extractMessageText, filterMessageParts, sanitizeMessagesForAgent } from "./messages";
 import type { AgentArgs } from "./types";
 import {
   buildRetrievalMessage,
@@ -402,9 +402,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         }
       }
 
-      const messagesForAgent = filterMessageParts(
-        this.messages,
-        this.state.inputModalities
+      const messagesForAgent = sanitizeMessagesForAgent(
+        filterMessageParts(this.messages, this.state.inputModalities)
       );
 
       const lastUserIdx = messagesForAgent.findLastIndex((m) => m.role === "user");
