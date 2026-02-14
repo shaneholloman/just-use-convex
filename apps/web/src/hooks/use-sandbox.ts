@@ -33,9 +33,8 @@ type AgentCaller = {
 };
 
 type TerminalWriteState = {
-  inputBuffer: string;
-  optimisticBuffer: string;
-  inFlight: boolean;
+  queue: string[];
+  flushing: boolean;
   errored: boolean;
 };
 
@@ -57,9 +56,8 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
   const terminalRef = useRef<XtermTerminal | null>(null);
   const terminalIdRef = useRef<string | null>(null);
   const writeState = useRef<TerminalWriteState>({
-    inputBuffer: "",
-    optimisticBuffer: "",
-    inFlight: false,
+    queue: [],
+    flushing: false,
     errored: false,
   });
 
@@ -226,7 +224,6 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
     if (!agent || !terminalContainerRef.current || !activeTerminalId) return;
 
     let cancelled = false;
-    let writeTimer: ReturnType<typeof setInterval> | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let dispose: (() => void) | null = null;
 
@@ -291,8 +288,7 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
       void agent.call("streamPtyTerminal", [{ terminalId: activeTerminalId }], {
         onChunk: (chunk) => {
           if (cancelled || typeof chunk !== "string") return;
-          const toWrite = consumeOptimisticEcho(chunk, writeState);
-          if (toWrite) term.write(toWrite);
+          term.write(chunk);
         },
         onDone: (finalChunk) => {
           if (cancelled) return;
@@ -309,33 +305,38 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
         if (!cancelled) term.writeln("\r\n[terminal stream error]");
       });
 
-      writeState.current = { inputBuffer: "", optimisticBuffer: "", inFlight: false, errored: false };
+      writeState.current = { queue: [], flushing: false, errored: false };
       void refreshTerminalSessions();
 
-      term.onData((data: string) => {
-        writeState.current.inputBuffer += data;
-      });
-
-      writeTimer = setInterval(() => {
+      const flushQueue = () => {
         const ws = writeState.current;
-        if (!ws.inputBuffer || !terminalIdRef.current || ws.inFlight) return;
+        if (ws.flushing || ws.queue.length === 0 || !terminalIdRef.current) return;
 
-        const pending = ws.inputBuffer;
-        ws.inFlight = true;
-        ws.inputBuffer = "";
-        ws.optimisticBuffer += pending;
+        // Drain all queued input into a single write
+        const data = ws.queue.join("");
+        ws.queue.length = 0;
+        ws.flushing = true;
 
-        void agent.call("writePtyTerminal", [{ terminalId: terminalIdRef.current, data: pending }])
+        void agent.call("writePtyTerminal", [{ terminalId: terminalIdRef.current, data }])
           .then(() => { ws.errored = false; })
           .catch(() => {
             if (!ws.errored) {
               term.writeln("\r\n[input unavailable]");
               ws.errored = true;
             }
-            ws.inputBuffer = pending + ws.inputBuffer;
+            // Re-queue failed data at front
+            ws.queue.unshift(data);
           })
-          .finally(() => { ws.inFlight = false; });
-      }, 25);
+          .finally(() => {
+            ws.flushing = false;
+            flushQueue();
+          });
+      };
+
+      term.onData((data: string) => {
+        writeState.current.queue.push(data);
+        flushQueue();
+      });
 
       resizeObserver = new ResizeObserver(() => {
         fitAddon.fit();
@@ -353,10 +354,9 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
 
     return () => {
       cancelled = true;
-      if (writeTimer) clearInterval(writeTimer);
       resizeObserver?.disconnect();
       terminalIdRef.current = null;
-      writeState.current = { inputBuffer: "", optimisticBuffer: "", inFlight: false, errored: false };
+      writeState.current = { queue: [], flushing: false, errored: false };
       terminalRef.current = null;
       dispose?.();
     };
@@ -420,37 +420,3 @@ function parseSshHost(sshCommand: string): string {
   return sshCommand.match(/@([^\s]+)/)?.[1] ?? "ssh.app.daytona.io";
 }
 
-function consumeOptimisticEcho(chunk: string, ws: { current: TerminalWriteState }) {
-  let pending = ws.current.optimisticBuffer;
-  if (!pending) return chunk;
-
-  let cursor = 0;
-  while (cursor < chunk.length && pending.length > 0) {
-    const char = chunk[cursor];
-    if (char === "\r" || char === "\n") { cursor++; continue; }
-
-    // Skip ANSI escape sequences
-    if (char === "\u001b" && chunk[cursor + 1] === "[") {
-      let i = cursor + 2;
-      while (i < chunk.length) {
-        const code = chunk.charCodeAt(i);
-        if (code >= 64 && code <= 126) { cursor = i + 1; break; }
-        i++;
-      }
-      if (i >= chunk.length) break;
-      continue;
-    }
-
-    if (chunk[cursor] === pending[0]) {
-      cursor++;
-      pending = pending.slice(1);
-      continue;
-    }
-
-    ws.current.optimisticBuffer = pending;
-    return chunk.slice(cursor);
-  }
-
-  ws.current.optimisticBuffer = pending;
-  return pending.length === 0 ? chunk.slice(cursor) : "";
-}

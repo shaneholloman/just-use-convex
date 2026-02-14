@@ -153,7 +153,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
 
     const agent = new PlanAgent({
       name: "Assistant",
-      systemPrompt: SYSTEM_PROMPT(this.chatDoc?.sandbox ? this.chatDoc.sandbox.doc() : undefined),
+      systemPrompt: SYSTEM_PROMPT(this.chatDoc?.sandbox ?? undefined),
       model: createAiClient(model, this.state.reasoningEffort),
       tools: withBackgroundTaskTools([
         createWebSearchToolkit(),

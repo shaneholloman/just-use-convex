@@ -20,7 +20,7 @@ import { authClient } from "@/lib/auth-client";
 import { getToken } from "@/lib/auth-server";
 import { seo } from '@/utils/seo'
 
-import Header from "../components/header";
+import Header from "../components/header/index";
 
 const getAuth = createServerFn({ method: "GET" }).handler(async () => {
   return await getToken();

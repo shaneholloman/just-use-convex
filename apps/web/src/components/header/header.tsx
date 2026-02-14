@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
-import { Tabs, TabsTrigger, TabsList } from "./ui/tabs";
+import { Tabs, TabsTrigger, TabsList } from "../ui/tabs";
 import { useHeader } from "@/hooks/use-header";
 
 export default function Header() {
@@ -42,7 +42,7 @@ export default function Header() {
     <div ref={headerRef} className="relative z-50 w-fit mx-auto">
       <Tabs
         value={activeTab ?? ""}
-        className="container mx-auto w-4xl border border-border rounded-lg mt-2 px-.5 overflow-x-auto no-scrollbar z-50 bg-background"
+        className="container mx-auto w-4xl border border-border rounded-lg px-.5 overflow-x-auto no-scrollbar z-50 bg-background"
       >
         <TabsList variant="line" className={`w-full justify-between`}>
           {links.map(({ to, label }) => (

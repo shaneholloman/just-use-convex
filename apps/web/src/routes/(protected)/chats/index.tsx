@@ -194,31 +194,35 @@ function ChatsListPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-6">
+      <div className="flex-1 min-h-0 flex flex-col gap-6 overflow-hidden">
         {hasPinnedChats && (
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-muted-foreground px-1">Pinned</h2>
+          <div className="flex-none max-h-[min(40vh,240px)] min-h-0 flex flex-col gap-2 overflow-hidden">
+            <h2 className="text-sm font-medium text-muted-foreground px-1 shrink-0">Pinned</h2>
             <VirtualList
               query={pinnedChatsQuery}
               renderItem={renderChatItem}
               estimateSize={72}
               gap={8}
+              loadMoreThreshold={5}
               getItemKey={(_: number, chat: Chat) => chat._id}
+              className="flex-1 min-h-0"
             />
           </div>
         )}
 
         {hasUnpinnedChats && (
-          <div className="flex flex-col gap-2">
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
             {hasPinnedChats && (
-              <h2 className="text-sm font-medium text-muted-foreground px-1">All Chats</h2>
+              <h2 className="text-sm font-medium text-muted-foreground px-1 shrink-0">All Chats</h2>
             )}
             <VirtualList
               query={unpinnedChatsQuery}
               renderItem={renderChatItem}
               estimateSize={72}
               gap={8}
+              loadMoreThreshold={5}
               getItemKey={(_: number, chat: Chat) => chat._id}
+              className="flex-1 min-h-0"
             />
           </div>
         )}
