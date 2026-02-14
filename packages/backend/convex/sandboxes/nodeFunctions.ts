@@ -7,13 +7,11 @@ import { z } from "zod";
 import { api } from "../_generated/api";
 import * as types from "./types";
 import { env } from "@just-use-convex/env/backend";
-import { Daytona, DaytonaNotFoundError } from "@daytonaio/sdk";
+import { Daytona, DaytonaNotFoundError, Sandbox } from "@daytonaio/sdk";
 
-const SANDBOX_START_TIMEOUT_SECONDS = 180;
 const SANDBOX_VOLUME_MOUNT_PATH = "/home/daytona";
 const SANDBOX_SNAPSHOT = "daytona-medium";
 const MAX_VOLUME_READY_RETRIES = 10;
-const SANDBOX_START_TIMEOUT_MESSAGE = "timeout waiting for the sandbox to start";
 
 const daytonaClient = new Daytona({
   apiKey: env.DAYTONA_API_KEY,
@@ -37,7 +35,7 @@ export const destroy = internalAction({
 
 export const createChatSshAccess = zAction({
   args: types.CreateChatSshAccessArgs,
-  handler: async (ctx, args): Promise<z.infer<typeof types.CreateChatSshAccessResult>> => {
+  handler: async (ctx, args): Promise<Awaited<ReturnType<Sandbox["createSshAccess"]>>> => {
     return await createChatSshAccessFunction(ctx, args);
   },
 });
@@ -66,26 +64,9 @@ async function createChatSshAccessFunction(ctx: zActionCtx, args: z.infer<typeof
 
   const sandbox = await daytonaClient.get(chat.sandboxId);
   await ensureSandboxStarted(sandbox);
-  const expiresInMinutes = args.expiresInMinutes ?? 2;
 
-  const sshAccess = await sandbox.createSshAccess(expiresInMinutes);
-  const sshExpiresAt = normalizeModTime(sshAccess.expiresAt);
-  if (sshExpiresAt === undefined) {
-    throw new Error("Daytona returned an invalid SSH expiration timestamp");
-  }
-
-  return {
-    chatId: chat._id,
-    sandboxId: chat.sandboxId,
-    sandboxName: chat.sandbox?.name ?? chat.sandboxId,
-    ssh: {
-      token: sshAccess.token,
-      expiresAt: sshExpiresAt,
-      expiresInMinutes,
-      host: "ssh.app.daytona.io",
-      command: `ssh ${sshAccess.token}@ssh.app.daytona.io`,
-    },
-  };
+  const sshAccess = await sandbox.createSshAccess(args.expiresInMinutes);
+  return sshAccess;
 }
 
 async function createChatPreviewAccessFunction(ctx: zActionCtx, args: z.infer<typeof types.CreateChatPreviewAccessArgs>) {
@@ -242,15 +223,4 @@ function createSandboxCreateOptions(
 
 function isDaytonaSandboxMissing(error: unknown): boolean {
   return error instanceof DaytonaNotFoundError;
-}
-
-function normalizeModTime(value: unknown): number | undefined {
-  if (value == null) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.getTime();
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
 }

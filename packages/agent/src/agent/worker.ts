@@ -20,7 +20,7 @@ import {
   setWaitUntil,
   type Toolkit,
 } from "@voltagent/core";
-import type { worker } from "@just-use-convex/agent/alchemy.run";
+import type { worker } from "../../alchemy.run";
 import { api } from "@just-use-convex/backend/convex/_generated/api";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import {
@@ -48,7 +48,11 @@ import {
   deleteMessageVectors,
   indexMessagesInVectorStore,
 } from "./vectorize";
-import { createSandboxPtyFunctions, createDaytonaToolkit } from "../tools/sandbox";
+import {
+  createDaytonaToolkit,
+  createSandboxFsFunctions,
+  createSandboxPtyFunctions,
+} from "../tools/sandbox";
 import { Daytona, type Sandbox } from "@daytonaio/sdk";
 
 type CallableFunctionInstance = object;
@@ -111,7 +115,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     }
 
     this.callableFunctions = [
-      ...(this.sandbox ? [createSandboxPtyFunctions(this.sandbox)] : []),
+      ...(this.sandbox ? [createSandboxFsFunctions(this.sandbox), createSandboxPtyFunctions(this.sandbox)] : []),
     ];
     await this._registerCallableFunctions();
 
@@ -258,6 +262,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     if (this.didRegisterCallableFunctions || !this.callableFunctions.length) {
       return;
     }
+    const streamingMethods = new Set(["openPtyTerminal"]);
 
     await Promise.all(this.callableFunctions.map(async (fn) => {
       const proto = Object.getPrototypeOf(fn);
@@ -267,7 +272,8 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
           name !== "constructor" && typeof callableMap[name] === "function"
       );
       const workerProto = Object.getPrototypeOf(this);
-      const register = callable();
+      const register = (name: CallableServiceMethod) =>
+        callable(streamingMethods.has(name) ? { streaming: true } : undefined);
 
       for (const name of names) {
         if (name in workerProto) {
@@ -282,7 +288,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
           return methodFn.bind(fn)(...args);
         };
 
-        register(method, { name } as unknown as ClassMethodDecoratorContext);
+        register(name)(method, { name } as unknown as ClassMethodDecoratorContext);
         Object.defineProperty(workerProto, name, {
           value: method,
           writable: false,

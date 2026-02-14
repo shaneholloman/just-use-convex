@@ -57,19 +57,6 @@ export const CreateChatPreviewAccessArgs = z.object({
   previewPort: z.number().min(1).max(65535).default(3000),
 });
 
-export const CreateChatSshAccessResult = z.object({
-  chatId: zid("chats"),
-  sandboxId: SandboxIdSchema,
-  sandboxName: z.string(),
-  ssh: z.object({
-    token: z.string(),
-    expiresAt: z.number(),
-    expiresInMinutes: z.number(),
-    host: z.string(),
-    command: z.string(),
-  }),
-});
-
 export const CreateChatPreviewAccessResult = z.object({
   chatId: zid("chats"),
   sandboxId: SandboxIdSchema,
