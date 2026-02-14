@@ -131,7 +131,7 @@ export function ChatSandboxWorkspace({
         onValueChange={(value) => setActiveTab(value as "preview" | "terminal" | "explorer")}
         className="flex h-full flex-col gap-0"
       >
-        <div className="flex items-center justify-between border-b px-2 py-1.5">
+        <div className="flex items-center justify-end border-b px-2 py-1.5">
           <TabsList className="w-auto">
             <TabsTrigger value="preview">Preview</TabsTrigger>
             <TabsTrigger value="terminal">Terminal</TabsTrigger>
@@ -140,8 +140,8 @@ export function ChatSandboxWorkspace({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button type="button" variant="ghost" size="icon-sm" aria-label="Open in VSCode or Cursor">
-                  <LaptopIcon className="size-3.5" />
+                <Button type="button" variant="ghost" size="icon-lg" aria-label="Open in VSCode or Cursor">
+                  <LaptopIcon />
                 </Button>
               }
             />

@@ -15,7 +15,7 @@ const agentWorkerNamespace = DurableObjectNamespace("agent-worker", {
 const chatMessagesIndex = await VectorizeIndex("chat-messages", {
   name: "chat-messages",
   description: "Embeddings for chat messages",
-  dimensions: 1536,
+  dimensions: 768,
   metric: "cosine",
   adopt: true,
 });
