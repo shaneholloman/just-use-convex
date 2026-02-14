@@ -79,8 +79,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     if (Object.keys(currentState).length) {
       this.setState(currentState);
     }
-    this._registerCallableFunctions();
-
     if (!this.convexAdapter) {
       const activeTokenConfig = initArgs.tokenConfig ?? currentState.tokenConfig;
       if (!activeTokenConfig) {
@@ -115,6 +113,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     this.callableFunctions = [
       ...(this.sandbox ? [createSandboxPtyFunctions(this.sandbox)] : []),
     ];
+    await this._registerCallableFunctions();
 
   }
 
@@ -256,7 +255,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
   }
 
   private async _registerCallableFunctions() {
-    if (this.didRegisterCallableFunctions) {
+    if (this.didRegisterCallableFunctions || !this.callableFunctions.length) {
       return;
     }
 
@@ -280,7 +279,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
           if (!methodFn) {
             throw new Error(`Callable method "${name}" is not available`);
           }
-          return methodFn(...args);
+          return methodFn.bind(fn)(...args);
         };
 
         register(method, { name } as unknown as ClassMethodDecoratorContext);

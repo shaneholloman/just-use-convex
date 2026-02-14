@@ -42,6 +42,7 @@ turbo dev          # Turborepo dev
 // MANDATORY RUN at the end
 bun check-types
 ```
+Always run `bun check-types` after code changes before finalizing. If it fails, re-run until it passes.
 
 ### On Finish
 

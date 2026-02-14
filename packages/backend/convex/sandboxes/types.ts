@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { z } from "zod";
 import { sandboxesZodSchema, sandboxesWithSystemFields } from "../tables/sandboxes";
 import { paginationOptsValidator } from "convex/server";
@@ -30,6 +31,8 @@ export const UpdateArgs = SandboxWithSystemFields.pick({ _id: true }).extend({
 
 export const DeleteArgs = SandboxWithSystemFields.pick({ _id: true });
 
+export const sandboxIdArgs = { sandboxId: v.id("sandboxes") } as const;
+
 // For getting chats by sandbox
 export const GetChatsArgs = SandboxWithSystemFields.pick({ _id: true }).extend({
   paginationOpts: zPaginationOpts,
@@ -41,6 +44,9 @@ export const SearchArgs = z.object({
   paginationOpts: zPaginationOpts,
 });
 
+const SandboxIdSchema = zid("sandboxes");
+export type SandboxId = z.infer<typeof SandboxIdSchema>;
+
 export const CreateChatSshAccessArgs = z.object({
   chatId: zid("chats"),
   expiresInMinutes: z.number().min(1).max(1440).optional(),
@@ -49,11 +55,11 @@ export const CreateChatSshAccessArgs = z.object({
 export const CreateChatPreviewAccessArgs = z.object({
   chatId: zid("chats"),
   previewPort: z.number().min(1).max(65535).default(3000),
-}); 
+});
 
 export const CreateChatSshAccessResult = z.object({
   chatId: zid("chats"),
-  sandboxId: zid("sandboxes"),
+  sandboxId: SandboxIdSchema,
   sandboxName: z.string(),
   ssh: z.object({
     token: z.string(),
@@ -66,7 +72,7 @@ export const CreateChatSshAccessResult = z.object({
 
 export const CreateChatPreviewAccessResult = z.object({
   chatId: zid("chats"),
-  sandboxId: zid("sandboxes"),
+  sandboxId: SandboxIdSchema,
   sandboxName: z.string(),
   preview: z.object({
     port: z.number(),

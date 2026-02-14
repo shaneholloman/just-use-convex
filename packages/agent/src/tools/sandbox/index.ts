@@ -3,7 +3,6 @@ import { Daytona, type Sandbox } from '@daytonaio/sdk';
 import { createTool, type Toolkit } from '@voltagent/core';
 import { SandboxPtyService } from './pty';
 import {
-  DEFAULT_LIST_OFFSET,
   editSchema,
   execSchema,
   generateDownloadUrlSchema,
@@ -241,7 +240,11 @@ async function getCodeInterpreterContext(sandbox: Sandbox, notebookId: string) {
   return context;
 }
 
-function sliceByOffsetLimit(text: string, offset = DEFAULT_LIST_OFFSET, limit?: number): {
+export function createSandboxPtyFunctions(sandbox: Sandbox) {
+  return new SandboxPtyService(sandbox);
+}
+
+function sliceByOffsetLimit(text: string, offset = 0, limit?: number): {
   totalLines: number;
   returnedLines: number;
   hasMore: boolean;
@@ -249,10 +252,10 @@ function sliceByOffsetLimit(text: string, offset = DEFAULT_LIST_OFFSET, limit?: 
 } {
   const start = Math.max(0, Math.floor(offset));
   const safeLimit = limit === undefined ? undefined : Math.max(1, Math.floor(limit));
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   const from = Math.min(start, lines.length);
   const to = safeLimit === undefined ? lines.length : Math.min(lines.length, from + safeLimit);
-  const sliced = lines.slice(from, to).join('\n');
+  const sliced = lines.slice(from, to).join("\n");
 
   return {
     totalLines: lines.length,
@@ -264,7 +267,7 @@ function sliceByOffsetLimit(text: string, offset = DEFAULT_LIST_OFFSET, limit?: 
 
 function replaceInText(input: string, oldText: string, newText: string, replaceAll: boolean) {
   if (oldText.length === 0) {
-    throw new Error('oldText cannot be empty');
+    throw new Error("oldText cannot be empty");
   }
 
   if (replaceAll) {
@@ -284,8 +287,4 @@ function replaceInText(input: string, oldText: string, newText: string, replaceA
     result: `${input.slice(0, index)}${newText}${input.slice(index + oldText.length)}`,
     count: 1,
   };
-}
-
-export function createSandboxPtyFunctions(sandbox: Sandbox) {
-  return new SandboxPtyService(() => Promise.resolve(sandbox));
 }

@@ -24,11 +24,15 @@ export type ExplorerState = {
   entries: ExplorerEntry[];
 };
 
+/** Wire format from listPtyTerminalSessions - matches Daytona PtySessionInfo */
 export type TerminalSession = {
   id: string;
-  pid?: number;
+  active?: boolean;
+  processId?: number;
   cwd?: string;
-  isAlive?: boolean;
+  cols?: number;
+  rows?: number;
+  createdAt?: string;
 };
 
 const TERMINAL_BACKGROUND = "#0b0f19";

@@ -112,7 +112,7 @@ export function ChatSandboxWorkspace({
       ...terminalSessions,
       {
         id: activeTerminalId,
-        isAlive: false,
+        active: false,
         cwd: "",
       } satisfies TerminalSession,
     ];
@@ -230,7 +230,7 @@ export function ChatSandboxWorkspace({
                           className="flex items-center justify-between gap-4"
                         >
                           <span className="truncate text-sm">
-                            {formatSessionLabel(session.id, session.isAlive ?? false)}
+                            {formatSessionLabel(session.id, session.active ?? false)}
                             {isCurrentSession ? " (current)" : ""}
                           </span>
                           <Button

@@ -1,50 +1,14 @@
-import type {
-  Match,
-} from "@daytonaio/sdk";
 import { z } from "zod";
 
 export const DEFAULT_LIST_OFFSET = 0;
 export const DEFAULT_LIST_LIMIT = 1000;
-export const DEFAULT_TERMINAL_ID = 'default';
+export const DEFAULT_TERMINAL_ID = "default";
 
 export const ptyTerminalIdSchema = z
   .string()
   .min(1)
+  .default(DEFAULT_TERMINAL_ID)
   .describe("Terminal session ID for get-or-create semantics.");
-
-export const ptySessionCreateParameters = z.object({
-  terminalId: ptyTerminalIdSchema.optional(),
-  cols: z.number().int().positive().optional(),
-  rows: z.number().int().positive().optional(),
-  cwd: z.string().min(1).optional(),
-  envs: z.record(z.string()).optional(),
-});
-
-export const xtermReadParameters = z.object({
-  terminalId: ptyTerminalIdSchema,
-  offset: z.number().int().nonnegative().default(0),
-});
-
-export const xtermWriteParameters = z.object({
-  terminalId: ptyTerminalIdSchema,
-  data: z.string().describe("Raw xterm input data."),
-  cols: z.number().int().positive().optional(),
-  rows: z.number().int().positive().optional(),
-  cwd: z.string().min(1).optional(),
-  envs: z.record(z.string()).optional(),
-});
-
-export const xtermResizeParameters = z.object({
-  terminalId: ptyTerminalIdSchema,
-  cols: z.number().int().positive(),
-  rows: z.number().int().positive(),
-});
-
-export const xtermCloseParameters = z.object({
-  terminalId: ptyTerminalIdSchema,
-});
-
-export const xtermListParameters = z.object({});
 
 export const exposeServiceParameters = z.object({
   port: z
@@ -126,10 +90,7 @@ export const generateDownloadUrlSchema = z.object({
 });
 
 export const execSchema = z.object({
-  terminalId: z
-    .string()
-    .default(DEFAULT_TERMINAL_ID)
-    .describe("Terminal session ID. Default: 'default'"),
+  terminalId: ptyTerminalIdSchema,
   command: z.string().describe('Shell command to execute'),
   background: z
     .boolean()
@@ -158,47 +119,4 @@ export const statefulCodeExecSchema = z.object({
   code: z.string().describe('Python code to execute'),
 });
 
-export type PtySessionCreateInput = z.infer<typeof ptySessionCreateParameters>;
-export type XtermReadInput = z.infer<typeof xtermReadParameters>;
-export type XtermWriteInput = z.infer<typeof xtermWriteParameters>;
-export type XtermResizeInput = z.infer<typeof xtermResizeParameters>;
-export type XtermCloseInput = z.infer<typeof xtermCloseParameters>;
-export type XtermListInput = z.infer<typeof xtermListParameters>;
 export type ExposeServiceInput = z.infer<typeof exposeServiceParameters>;
-
-export type OpenPtyTerminalResult = {
-  terminalId: string;
-};
-
-export type ListPtyTerminalSessionsResult = {
-  sessions: PtySessionInfo[];
-};
-
-export type WritePtyTerminalResult = {
-  bytes: number;
-};
-
-export type ReadPtyTerminalResult = {
-  data: string;
-  offset: number;
-  closed?: boolean;
-  closeReason?: string;
-};
-
-export type ResizePtyTerminalResult = {
-  terminalId: string;
-};
-
-export type ClosePtyTerminalResult = {
-  terminalId: string;
-  closed: true;
-};
-
-export type PtySessionInfo = {
-  id: string;
-  pid?: number;
-  cwd?: string;
-  isAlive?: boolean;
-};
-
-export type GrepMatch = Pick<Match, "file" | "line" | "content">;
