@@ -93,12 +93,12 @@ export function ChatSandboxWorkspace({
   }, [explorer?.entries]);
 
   const pathSegments = useMemo(() => {
-    const path = explorer?.path ?? "workspace";
-    const parts = path.split("/").filter(Boolean);
-    return parts.map((part, index) => ({
+    const parts = explorer?.path?.split("/").filter(Boolean) ?? [];
+    const segments = [{ name: "Home", path: "/" }, ...parts.map((part, index) => ({
       name: part,
-      path: parts.slice(0, index + 1).join("/"),
-    }));
+      path: `/${parts.slice(0, index + 1).join("/")}`,
+    }))];
+    return segments;
   }, [explorer?.path]);
 
   const sessionOptions = useMemo(() => {

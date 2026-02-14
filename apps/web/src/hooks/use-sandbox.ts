@@ -112,7 +112,7 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
 
       const host = session.sshCommand ? parseSshHost(session.sshCommand) : "ssh.app.daytona.io";
       const scheme = editor === "vscode" ? "vscode" : "cursor";
-      window.open(`${scheme}://vscode-remote/ssh-remote+${session.token}@${host}/home/daytona/workspace`, "_blank");
+      window.open(`${scheme}://vscode-remote/ssh-remote+${session.token}@${host}/home/daytona`, "_blank");
     },
     [createSshAccess, sshSession]
   );
@@ -120,14 +120,13 @@ export function useChatSandbox(chatId: Id<"chats">, agent: AgentCaller | null) {
   const refreshExplorer = useCallback(async (path?: string) => {
     if (!agent) return;
     try {
-      const resolvedPath = path ?? explorer?.path ?? ".";
+      const resolvedPath = path ?? explorer?.path ?? "/";
       const entries = (await agent.call("listFiles", [{ path: resolvedPath }])) as FileInfo[];
-      const basePath = resolvedPath === "." || resolvedPath === "" ? "" : resolvedPath.replace(/\/$/, "");
       setExplorer({
-        path: basePath || ".",
+        path: resolvedPath || "/",
         entries: entries.map((e) => ({
           name: e.name,
-          path: basePath ? `${basePath}/${e.name}` : e.name,
+          path: resolvedPath ? `${resolvedPath}/${e.name}` : e.name,
           isDir: e.isDir,
           size: e.size,
           modifiedAt: new Date(e.modTime).getTime(),

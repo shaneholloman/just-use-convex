@@ -268,30 +268,35 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     const sandbox = this.sandbox;
     if (!sandbox || filePartUrls.length === 0) return null;
 
-    const uploadsDir = "/home/daytona/volume/uploads";
-    const mkdirResult = await sandbox.process.executeCommand(`mkdir -p ${uploadsDir}`);
-    if (mkdirResult.exitCode !== 0) {
-      console.warn("Could not create uploads dir:", mkdirResult.result);
+    try {
+      const uploadsDir = "/home/daytona/volume/uploads";
+      const mkdirResult = await sandbox.process.executeCommand(`mkdir -p ${uploadsDir}`);
+      if (mkdirResult.exitCode !== 0) {
+        console.warn("Could not create uploads dir:", mkdirResult.result);
+        return null;
+      }
+
+      const paths: string[] = [];
+      await Promise.all(
+        filePartUrls.map(async ({ url, filename }, i) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const buf = Buffer.from(await res.arrayBuffer());
+            const safeName = filename.replace(/[/\\]/g, "_");
+            const path = `${uploadsDir}/${i}_${safeName}`;
+            await sandbox.fs.uploadFile(buf, path);
+            paths.push(path);
+          } catch (err) {
+            console.warn("Failed to download file from message:", url, err);
+          }
+        })
+      );
+      return paths;
+    } catch (err) {
+      console.warn("Daytona sandbox error during file upload:", err);
       return null;
     }
-
-    const paths: string[] = [];
-    await Promise.all(
-      filePartUrls.map(async ({ url, filename }, i) => {
-        try {
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const buf = Buffer.from(await res.arrayBuffer());
-          const safeName = filename.replace(/[/\\]/g, "_");
-          const path = `${uploadsDir}/${i}_${safeName}`;
-          await sandbox.fs.uploadFile(buf, path);
-          paths.push(path);
-        } catch (err) {
-          console.warn("Failed to download file from message:", url, err);
-        }
-      })
-    );
-    return paths;
   }
 
   private async _registerCallableFunctions() {
@@ -417,6 +422,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
         if (!this.convexAdapter) {
           throw new Error("No convex adapter");
         }
+      }
+
+      if (this.sandbox) {
+        await this.sandbox.waitUntilStarted()
       }
 
       const updateFn = this.convexAdapter.getTokenType() === "ext"

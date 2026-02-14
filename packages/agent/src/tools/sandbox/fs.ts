@@ -15,11 +15,13 @@ export class SandboxFsService {
   constructor(private sandbox: Sandbox) {}
 
   async listFiles(input: ListFilesInput) {
+    await this.sandbox.waitUntilStarted();
     const { path } = listSchema.parse(input);
     return await this.sandbox.fs.listFiles(path);
   }
 
   async downloadFile(input: DownloadFileInput) {
+    await this.sandbox.waitUntilStarted();
     const { path } = downloadFileSchema.parse(input);
     const fileBuffer = await this.sandbox.fs.downloadFile(path);
     const file = new File([fileBuffer], path.split('/').pop() ?? 'file.txt');
@@ -27,6 +29,7 @@ export class SandboxFsService {
   }
 
   async downloadFolder(input: DownloadFolderInput) {
+    await this.sandbox.waitUntilStarted();
     const { path } = downloadFolderSchema.parse(input);
     const command = `tar -czf - ${path} | base64 -w 0`;
     const commandResult = await this.sandbox.process.executeCommand(command);
@@ -37,6 +40,7 @@ export class SandboxFsService {
   }
 
   async deleteEntry(input: DeleteEntryInput) {
+    await this.sandbox.waitUntilStarted();
     const { path } = deleteEntrySchema.parse(input);
     const command = `rm -rf ${path}`;
     await this.sandbox.process.executeCommand(command);
