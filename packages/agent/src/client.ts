@@ -15,8 +15,8 @@ export function createAiClient(model: string, reasoningEffort?: "low" | "medium"
 }
 
 export const embeddingClient = {
-  model: openrouter.textEmbeddingModel("openai/text-embedding-3-small"),
-  size: 1536,
+  model: openrouter.textEmbeddingModel("thenlper/gte-base"),
+  size: 768,
 }
 
 export async function embedTexts(values: string[], abortSignal?: AbortSignal): Promise<number[][]> {

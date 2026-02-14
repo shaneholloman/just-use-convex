@@ -74,31 +74,33 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     if (!initArgs) {
       throw new Error("Agent not initialized: missing initArgs");
     }
+    const persistedState = await this.ctx.storage.get<AgentArgs>("chatState");
+    const currentState: AgentArgs = this.state ?? persistedState ?? {};
     const { model, reasoningEffort, inputModalities, tokenConfig } = initArgs;
-    const nextState = {
-      ...(model && this.state.model !== model ? { model } : {}),
-      ...(reasoningEffort && this.state.reasoningEffort !== reasoningEffort
-        ? { reasoningEffort }
-        : {}),
-      ...(inputModalities &&
-      JSON.stringify(this.state.inputModalities) !== JSON.stringify(inputModalities)
-        ? { inputModalities }
-        : {}),
-      ...(tokenConfig &&
-      JSON.stringify(this.state.tokenConfig) !== JSON.stringify(tokenConfig)
-        ? { tokenConfig }
-        : {}),
+    const nextState: Partial<AgentArgs> = {};
+    const updateIfChanged = <K extends keyof AgentArgs>(key: K, incomingValue: AgentArgs[K]) => {
+      if (incomingValue === undefined) return;
+      if (isSameStateValue(currentState[key], incomingValue)) return;
+      nextState[key] = incomingValue;
     };
-    if (Object.keys(nextState).length) {
-      this.setState({
-        ...this.state,
-        ...nextState,
-      });
+  
+    updateIfChanged("model", initArgs.model);
+    updateIfChanged("reasoningEffort", initArgs.reasoningEffort);
+    updateIfChanged("inputModalities", initArgs.inputModalities);
+    updateIfChanged("tokenConfig", initArgs.tokenConfig);
+  
+
+    const mergedState = {
+      ...currentState,
+      ...nextState,
+    };
+    if (Object.keys(mergedState).length) {
+      this.setState(mergedState);
     }
     this._registerCallableFunctions();
 
     if (!this.convexAdapter) {
-      const activeTokenConfig = tokenConfig ?? this.state?.tokenConfig;
+      const activeTokenConfig = tokenConfig ?? currentState.tokenConfig;
       if (!activeTokenConfig) {
         throw new Error("Unauthorized: No token provided");
       }
@@ -134,10 +136,10 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
 
     if (model || reasoningEffort || inputModalities || tokenConfig) {
       await this.ctx.storage.put("chatState", {
-        model: model ?? this.state?.model,
-        reasoningEffort: reasoningEffort ?? this.state?.reasoningEffort,
-        inputModalities: inputModalities ?? this.state?.inputModalities,
-        tokenConfig: tokenConfig ?? this.state?.tokenConfig,
+        model: model ?? currentState.model,
+        reasoningEffort: reasoningEffort ?? currentState.reasoningEffort,
+        inputModalities: inputModalities ?? currentState.inputModalities,
+        tokenConfig: tokenConfig ?? currentState.tokenConfig,
       } satisfies AgentArgs);
     }
   }
@@ -246,7 +248,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
 
   private async _patchAgent(): Promise<void> {
     const agent = this.planAgent;
-    if (!agent) throw new Error("Agent not found");
+    if (!agent) return;
 
     const tasks = agent.getTools().find((t) => t.name === "task");
     if (tasks) {
@@ -454,4 +456,18 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       return new Response("Internal Server Error", { status: 500 });
     }
   }
+}
+
+function isSameStateValue<T>(currentValue: T | undefined, nextValue: T | undefined): boolean {
+  if (currentValue === nextValue) return true;
+  if (currentValue == null || nextValue == null) return false;
+
+  if (Array.isArray(currentValue) && Array.isArray(nextValue)) {
+    return (
+      currentValue.length === nextValue.length &&
+      currentValue.every((value, index) => Object.is(value, nextValue[index]))
+    );
+  }
+
+  return JSON.stringify(currentValue) === JSON.stringify(nextValue);
 }
