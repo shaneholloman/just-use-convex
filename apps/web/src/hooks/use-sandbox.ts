@@ -4,6 +4,7 @@ import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { useAction } from "convex/react";
 import { toast } from "sonner";
 import type { Terminal as XtermTerminal } from "xterm";
+import type { FunctionReturnType } from "convex/server";
 import type {
   ExplorerEntry,
   ExplorerState,
@@ -13,6 +14,9 @@ import type {
 } from "@just-use-convex/agent/src/tools/sandbox/types";
 
 export type { ExplorerEntry, ExplorerState, TerminalSession };
+export type ChatSshSessionState = FunctionReturnType<typeof api.sandboxes.nodeFunctions.createChatSshAccess> | null;
+export type ChatExplorerState = ExplorerState | null;
+export type ChatTerminalSessionsState = TerminalSession[];
 
 const TERMINAL_BACKGROUND = "#0b0f19";
 

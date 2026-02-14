@@ -1,8 +1,8 @@
 # just-use-convex
 
-An organization-ready full-stack template built with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack). Pre-configured with Better Auth, Convex, Zod validation, and Convex Ents - everything you need to build multi-tenant SaaS applications.
+An AI-powered agentic chat platform built with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack). Multi-tenant, real-time, with Better Auth, Convex, Daytona sandboxes, vector search (RAG), and planning agents with sub-agents.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmantrakp04%2Fjust-use-convex&env=VITE_SITE_URL,CONVEX_DEPLOY_KEY,VITE_CONVEX_URL,VITE_CONVEX_SITE_URL,VITE_AGENT_URL&envDefaults=%7B%22VITE_SITE_URL%22%3A%22https%3A%2F%2Fjust-use-convex-web.vercel.app%2F%22%2C%22CONVEX_DEPLOY_KEY%22%3A%22go%20to%20https%3A%2F%2Fdashboard.convex.dev%2Ft%2Fbarrel-lube%2Fbetter-cvx%2F%3Cprod%20slug%3E%2Fsettings%20-%3E%20Deploy%20Keys%20-%3E%20Generate%20deploy%20key%22%2C%22VITE_CONVEX_URL%22%3A%22https%3A%2F%2F%3Cslug%3E.convex.cloud%22%2C%22VITE_CONVEX_SITE_URL%22%3A%22https%3A%2F%2F%3Cslug%3E.convex.site%22%2C%22VITE_AGENT_URL%22%3A%22https%3A%2F%2Fjust-use-convex-agent-worker-barrel.mantrakp.workers.dev%22%7D&project-name=just-use-convex&demo-title=Just-Use-Convex&demo-description=An%20org%20configured%20template)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmantrakp04%2Fjust-use-convex&env=VITE_SITE_URL,CONVEX_DEPLOY_KEY,VITE_CONVEX_URL,VITE_CONVEX_SITE_URL,VITE_AGENT_URL&envDefaults=%7B%22VITE_SITE_URL%22%3A%22https%3A%2F%2Fyour-project.vercel.app%22%2C%22CONVEX_DEPLOY_KEY%22%3A%22Generate%20at%20dashboard.convex.dev%20-%3E%20Project%20Settings%20-%3E%20Deploy%20Keys%22%2C%22VITE_CONVEX_URL%22%3A%22https%3A%2F%2F%3Cslug%3E.convex.cloud%22%2C%22VITE_CONVEX_SITE_URL%22%3A%22https%3A%2F%2F%3Cslug%3E.convex.site%22%2C%22VITE_AGENT_URL%22%3A%22https%3A%2F%2Fyour-agent.your-subdomain.workers.dev%22%7D&project-name=just-use-convex&demo-title=Just-Use-Convex&demo-description=An%20org%20configured%20template)
 
 ## Why This Template?
 
@@ -36,6 +36,14 @@ Built-in documentation powered by Fumadocs:
 - Full-text search via `/api/search`
 - Accessible at `/docs` route
 
+### AI Agent
+Cloudflare Workers + Durable Objects for persistent chat state:
+- **Planning agents** — VoltAgent Core with multi-step task decomposition and sub-agents
+- **Daytona sandboxes** — PTY terminals, file ops, code interpreter per chat
+- **Tools** — web search (Exa), ask-user (structured questions), vector RAG (Cloudflare Vectorize)
+- **Streaming** — text-delta, reasoning-delta, tool-call, tool-result over WebSocket
+- **Multi-model** — OpenRouter with configurable reasoning effort
+
 ### Demo Application
 Includes a fully-featured todo app demonstrating all patterns:
 - Kanban, list, and calendar views
@@ -66,6 +74,17 @@ Includes a fully-featured todo app demonstrating all patterns:
 | Better Auth | Authentication with organization plugin |
 | @convex-dev/aggregate | Real-time statistics computation |
 
+### Agent
+| Technology | Purpose |
+|------------|---------|
+| Cloudflare Workers | Edge runtime |
+| Durable Objects | Persistent agent state per chat |
+| VoltAgent Core | Planning, sub-agents, task decomposition |
+| OpenRouter | Multi-model LLM access |
+| Daytona SDK | Sandboxed code execution (PTY, file ops) |
+| Exa | Neural web search |
+| Cloudflare Vectorize | RAG over chat messages |
+
 ### Build & DX
 | Technology | Purpose |
 |------------|---------|
@@ -78,7 +97,8 @@ Includes a fully-featured todo app demonstrating all patterns:
 
 ### Prerequisites
 - [Bun](https://bun.sh/) v1.3.6 or later
-- A Convex account (free tier available)
+- [Convex](https://convex.dev/) account (free tier available)
+- [Cloudflare](https://dash.cloudflare.com/) account (optional, for agent deployment)
 
 ### Installation
 
@@ -116,7 +136,7 @@ cd packages/backend && bunx convex run auth:getLatestJwks | bunx convex env set 
 bun run dev
 ```
 
-6. Open [http://localhost:3001](http://localhost:3001) in your browser.
+7. Open [http://localhost:3001](http://localhost:3001) in your browser.
 
 ## Project Structure
 
@@ -135,40 +155,20 @@ just-use-convex/
 │       │       ├── (protected)/ # Dashboard & settings
 │       │       └── docs/       # Documentation pages (Fumadocs)
 ├── packages/
+│   ├── agent/                  # Cloudflare Workers AI agent (Alchemy-managed)
+│   │   ├── src/agent/          # AgentWorker, ConvexAdapter, prompts, vectorize
+│   │   ├── src/tools/          # web_search, ask_user, sandbox (PTY, file ops)
+│   │   └── alchemy.run.ts      # IaC — DurableObject, Vectorize, secrets
 │   ├── backend/                # Convex backend
 │   │   └── convex/
+│   │       ├── chats/          # Chat CRUD, search, stats
+│   │       ├── sandboxes/      # Sandbox lifecycle (Daytona triggers)
 │   │       ├── todos/          # Todo CRUD operations
 │   │       ├── statistics/     # Aggregate queries
-|   |       |── functions.ts    # Wrapped functions with zod and ents injection + auth validation
 │   │       ├── schema.ts       # Database schema
 │   │       └── auth.ts         # Auth configuration
 │   ├── config/                 # Shared configuration
 │   └── env/                    # Environment variable schemas (T3 Env)
-```
-
-## Schema Example
-
-The demo todo app shows typical patterns you'll use:
-
-```typescript
-// Entity with org/team scoping
-Todo {
-  organizationId: string    // Multi-tenant isolation
-  userId: string            // Creator reference
-  teamId?: string           // Optional team scoping
-  title: string
-  description?: string
-  status: "todo" | "in_progress" | "done"
-  priority: "low" | "medium" | "high"
-  dueDate?: number
-}
-
-// Junction table for many-to-many relationships
-TodoAssignedUser {
-  todoId: Id<"todos">
-  userId: string
-  assignedBy: string
-}
 ```
 
 ## Available Scripts
@@ -177,8 +177,18 @@ TodoAssignedUser {
 |---------|-------------|
 | `bun run dev` | Start all apps in development mode |
 | `bun run dev:web` | Start only the web application |
+| `bun run dev:server` | Start Convex backend only |
 | `bun run dev:setup` | Setup and configure Convex project |
 | `bun run check-types` | TypeScript type checking across all packages |
+
+### Agent (Cloudflare)
+
+```bash
+cd packages/agent
+bunx alchemy dev alchemy.run.ts      # Local dev
+bunx alchemy deploy alchemy.run.ts   # Deploy to Cloudflare
+bunx alchemy destroy alchemy.run.ts  # Tear down infrastructure
+```
 
 ## Auth Flow (Built-in)
 
@@ -188,60 +198,6 @@ TodoAssignedUser {
 4. JWT tokens include user info and active org/team
 5. Organization preferences persist across sessions
 
-## Usage Patterns
-
-### Type-safe Backend with Zod
-
-```typescript
-// Custom helpers provide auth context + Zod validation
-export const list = zCustomQuery({
-  args: { status: z.enum(["todo", "in_progress", "done"]).optional() },
-  handler: async (ctx, args) => {
-    const { user, organizationId } = ctx;  // Auth context injected
-    return await ctx.db
-      .query("todos")
-      .withIndex("organizationId", (q) => q.eq("organizationId", organizationId))
-      .collect();
-  },
-});
-```
-
-### Convex Ents Relationships
-
-```typescript
-// Define relationships in schema
-const todos = defineEnt({...})
-  .edges("assignedUsers", { to: "todoAssignedUsers" });
-
-// Query with relationships
-const todo = await ctx.table("todos").getX(todoId);
-const assignedUsers = await todo.edge("assignedUsers");
-```
-
-### Frontend Queries
-
-```typescript
-// Real-time reactive queries
-const todos = useQuery(api.todos.list, { status: "todo" });
-const stats = useQuery(api.statistics.getOrgStats);
-```
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_CONVEX_URL` | Convex deployment URL |
-| `VITE_CONVEX_SITE_URL` | Frontend application URL |
-| `VITE_AGENT_URL` | Agent service URL |
-| `VITE_DATA_BUDDY_CLIENT_ID` | (Optional) DataBuddy analytics client ID |
-| `JWKS` | JSON Web Key Set for token validation |
-
-## Customizing the Template
-
-1. **Remove the demo app** - Delete `packages/backend/convex/todos/` and `apps/web/src/routes/(protected)/dashboard/`
-2. **Add your entities** - Define schemas in `packages/backend/convex/schema.ts` using Convex Ents
-3. **Create your queries** - Use `zCustomQuery`/`zCustomMutation` helpers for type-safe, authenticated endpoints
-4. **Build your UI** - 53 shadcn/ui components are pre-installed in `apps/web/src/components/ui/`
 
 ## Contributing
 

@@ -27,6 +27,7 @@ import {
   ConvexAdapter,
   createConvexAdapter,
   parseTokenFromUrl,
+  type TokenConfig,
 } from "@just-use-convex/backend/convex/lib/convexAdapter";
 import type { FunctionReturnType } from "convex/server";
 import { createAiClient } from "../client";
@@ -84,14 +85,12 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     if (Object.keys(currentState).length) {
       this.setState(currentState);
     }
-    if (!this.convexAdapter) {
-      const activeTokenConfig = initArgs.tokenConfig ?? currentState.tokenConfig;
-      if (!activeTokenConfig) {
-        throw new Error("Unauthorized: No token provided");
-      }
-      this.convexAdapter = await createConvexAdapter(this.env.CONVEX_URL, activeTokenConfig);
 
+    const activeTokenConfig = initArgs.tokenConfig ?? currentState.tokenConfig;
+    if (!activeTokenConfig) {
+      throw new Error("Unauthorized: No token provided");
     }
+    this.convexAdapter = await createConvexAdapter(this.env.CONVEX_URL, activeTokenConfig);
 
     const getFn = this.convexAdapter.getTokenType() === "ext"
     ? api.chats.index.getExt
@@ -104,13 +103,11 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     }
     this.chatDoc = chat;
 
-    if (!this.daytona) {
-      this.daytona = new Daytona({
-        apiKey: this.env.DAYTONA_API_KEY ?? '',
-        apiUrl: this.env.DAYTONA_API_URL ?? '',
-        target: this.env.DAYTONA_TARGET ?? '',
-      });
-    }
+    this.daytona = new Daytona({
+      apiKey: this.env.DAYTONA_API_KEY ?? '',
+      apiUrl: this.env.DAYTONA_API_URL ?? '',
+      target: this.env.DAYTONA_TARGET ?? '',
+    });
     if (!this.sandbox && this.chatDoc?.sandboxId) {
       this.sandbox = await this.daytona.get(this.chatDoc?.sandboxId);
       await this.sandbox.setAutostopInterval(
@@ -123,7 +120,6 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       ...(this.sandbox ? [createSandboxFsFunctions(this.sandbox), createSandboxPtyFunctions(this.sandbox)] : []),
     ];
     await this._registerCallableFunctions();
-
   }
 
   private async _prepAgent(): Promise<PlanAgent> {
