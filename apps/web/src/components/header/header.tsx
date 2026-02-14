@@ -42,7 +42,7 @@ export default function Header() {
     <div ref={headerRef} className="relative z-50 w-fit mx-auto">
       <Tabs
         value={activeTab ?? ""}
-        className="container mx-auto w-4xl border border-border rounded-lg px-.5 overflow-x-auto no-scrollbar z-50 bg-background"
+        className="container mx-auto w-4xl border border-border rounded-lg px-.5 overflow-x-auto no-scrollbar z-50 backdrop-blur-xs"
       >
         <TabsList variant="line" className={`w-full justify-between`}>
           {links.map(({ to, label }) => (

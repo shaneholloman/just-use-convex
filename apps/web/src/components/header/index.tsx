@@ -30,27 +30,44 @@ export default function HeaderIndex() {
   }, [setHeaderHeight]);
 
   return (
-    <div ref={blockRef} className="relative z-50 flex flex-row mt-2 items-center gap-2 w-fit mx-auto">
+    <motion.div
+      ref={blockRef}
+      layout
+      transition={springExpand}
+      className="relative z-50 flex flex-row mt-2 items-center gap-2 w-fit mx-auto"
+    >
       {/* Before slot - extensible for dynamic content */}
-      <AnimatePresence mode="wait">
-        {isChatDetail ? (
-          <motion.div
-            key="chats"
-            layout
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ ...springExpand, opacity: { duration: 0.15 } }}
-            className="overflow-hidden"
+      <AnimatePresence mode="popLayout">
+        <motion.div
+          key="header-before"
+          layout
+          initial={{ opacity: 0, width: 0 }}
+          animate={{ opacity: 1, width: "auto" }}
+          exit={{ opacity: 0, width: 0 }}
+          transition={{ ...springExpand, opacity: { duration: 0.15 } }}
+          className="ml-auto overflow-hidden"
           >
-            <HeaderChatsDropdown />
-          </motion.div>
-        ) : null}
+            {isChatDetail ? (
+              <HeaderChatsDropdown />
+            ) : null}
+        </motion.div>
       </AnimatePresence>
-      
+
       <Header />
 
-      {/* After slot - chats dropdown when on /chats/$chatId */}
-    </div>
+      {/* After slot - chats dropdown when on /chats/$chatId — left-to-right */}
+      <AnimatePresence mode="popLayout">
+        <motion.div
+          key="header-after"
+          layout
+          initial={{ opacity: 0, x: -16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ ...springExpand, opacity: { duration: 0.15 } }}
+          className="overflow-hidden"
+        >
+        </motion.div>
+      </AnimatePresence>
+    </motion.div>
   );
 }

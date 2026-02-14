@@ -88,7 +88,7 @@ export function HeaderChatsDropdown() {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-sm font-medium",
+          "flex items-center gap-2 rounded-md border border-border px-2 py-1.5 text-sm font-medium backdrop-blur-xs",
           "hover:bg-muted/50 transition-colors cursor-pointer"
         )}
       >
