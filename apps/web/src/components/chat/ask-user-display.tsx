@@ -1,4 +1,3 @@
-"use client";
 
 import { memo, useState, useCallback } from "react";
 import type { ChatAddToolApproveResponseFunction } from "ai";
