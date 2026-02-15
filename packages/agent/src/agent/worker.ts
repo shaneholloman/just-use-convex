@@ -337,6 +337,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
     await super.persistMessages(messages);
     await indexMessagesInVectorStore({
       env: this.env,
+      memberId: this.chatDoc?.memberId ?? "",
       agentName: this.name,
       chatId: this.chatDoc?._id as Id<"chats"> | undefined,
       messages,

@@ -20,11 +20,12 @@ export async function buildVectorId(agentName: string, messageId: string): Promi
 
 export async function indexMessagesInVectorStore(args: {
   env: typeof worker.Env;
+  memberId: string;
   agentName: string;
   chatId: Id<"chats"> | undefined;
   messages: UIMessage[];
 }): Promise<void> {
-  const { env, agentName, chatId, messages } = args;
+  const { env, memberId, agentName, chatId, messages } = args;
   const vectorize = env.vectorizeChatMessages;
   if (!vectorize || !chatId) return;
 
@@ -61,6 +62,7 @@ export async function indexMessagesInVectorStore(args: {
       id,
       values,
       metadata: meta,
+      namespace: memberId,
     });
   }
 
