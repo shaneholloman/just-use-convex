@@ -135,14 +135,19 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
       );
     }
 
-    if (!this.sandbox || !this.daytona || !this.state.model) {
-      throw new Error("Daytona or sandbox not found");
+    if (!this.state.model) {
+      throw new Error("Agent not initialized: missing model");
     }
     const model = this.state.model;
 
-    const subagents = (await Promise.all([
-      createDaytonaToolkit(this.daytona, this.sandbox),
-    ]) satisfies Toolkit[]).map((toolkit) =>
+    const subagents: Agent[] = [];
+    const toolkits: Promise<Toolkit>[] = [];
+    if (this.sandbox && this.daytona) {
+      toolkits.push(createDaytonaToolkit(this.daytona, this.sandbox));
+    }
+
+    for (const toolkit of await Promise.all(toolkits)) {
+      subagents.push(
         new Agent({
           name: toolkit.name,
           purpose: toolkit.description,
@@ -151,6 +156,7 @@ export class AgentWorker extends AIChatAgent<typeof worker.Env, AgentArgs> {
           tools: toolkit.tools,
         })
       );
+    }
 
     const agent = new PlanAgent({
       name: "Assistant",

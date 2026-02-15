@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "analyze": "BUILD_SOURCEMAP=true NODE_OPTIONS=--max-old-space-size=8192 bun run build && bunx source-map-explorer --only-mapped --no-border-checks '.output/public/assets/*.js'",
     "serve": "vite preview",
     "dev": "vite dev",
     "check-types": "tsc --noEmit"

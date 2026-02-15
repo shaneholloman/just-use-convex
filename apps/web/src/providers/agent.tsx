@@ -190,6 +190,7 @@ export function AgentsProvider({ children, token }: { children: ReactNode, token
   const defaultSettings = useAtomValue(defaultChatSettingsAtom);
 
   const requestInstance = useCallback((chatId: string) => {
+    if (!token) return; // Don't connect without auth
     createIsolatedInstance(chatId, token, defaultSettings);
   }, [token, defaultSettings]);
 

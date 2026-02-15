@@ -14,7 +14,7 @@ export default defineConfig({
   },
   build: {
     minify: false,
-    sourcemap: true,
+    sourcemap: false,
   },
   ssr: {
     noExternal: ["@convex-dev/better-auth"],
