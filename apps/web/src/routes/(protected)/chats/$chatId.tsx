@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { Id } from "@just-use-convex/backend/convex/_generated/dataModel";
 import { useOpenRouterModels, type OpenRouterModel } from "@/hooks/use-openrouter-models";
 import { ChatInput } from "@/components/chat";
@@ -21,6 +22,7 @@ import { ChatSandboxWorkspace } from "@/components/chat/chat-sandbox-workspace";
 import { useChatSandbox } from "@/hooks/use-sandbox";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useHeader } from "@/hooks/use-header";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/(protected)/chats/$chatId")({
   component: ChatPage,
@@ -37,6 +39,8 @@ function ChatLoadingSkeleton() {
   );
 }
 
+const PANEL_TRANSITION = "flex-grow 300ms cubic-bezier(0.32, 0.72, 0, 1)";
+
 function ChatPage() {
   const { chatId } = Route.useParams();
   const typedChatId = chatId as Id<"chats">;
@@ -44,9 +48,12 @@ function ChatPage() {
   const { groupedModels, models } = useOpenRouterModels();
   const sandbox = useChatSandbox(typedChatId, agent);
   const chatContentRef = useRef<HTMLDivElement>(null);
+  const sandboxPanelRef = useRef<PanelImperativeHandle>(null);
   const [isPanelResizing, setIsPanelResizing] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const isFirstRender = useRef(true);
   const { headerHeight } = useHeader();
-  
+
   const selectedModel = useMemo(
     () => models.find((m: OpenRouterModel) => m.slug === settings.model),
     [models, settings.model]
@@ -67,13 +74,35 @@ function ChatPage() {
     handleEditMessage,
   } = useChat(chat, agent);
 
+  // Sync sandbox.isOpen with panel collapse/expand via imperative API
   useEffect(() => {
-    // Find StickToBottom's internal scroll container via the role="log" element
+    const panel = sandboxPanelRef.current;
+    if (!panel) return;
+
+    // Skip animation on first render — defaultSize handles initial state
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    setIsAnimating(true);
+
+    if (sandbox.isOpen) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+
+    const timeout = setTimeout(() => setIsAnimating(false), 300);
+    return () => clearTimeout(timeout);
+  }, [sandbox.isOpen]);
+
+  // Preserve scroll position during panel resize animation
+  useEffect(() => {
     const scrollEl = chatContentRef.current
       ?.querySelector('[role="log"]')
       ?.firstElementChild as HTMLElement | null;
 
-    // Save scroll ratio before the width change causes content reflow
     let scrollRatio: number | null = null;
     if (scrollEl) {
       const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
@@ -82,10 +111,8 @@ function ChatPage() {
       }
     }
 
-    // Disable StickToBottom's resize handling so it doesn't fight our restoration
     setIsPanelResizing(true);
 
-    // Restore scroll position proportionally as content reflows from the width change
     if (scrollRatio !== null && scrollEl) {
       const restoreScroll = () => {
         const newMaxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
@@ -190,43 +217,60 @@ function ChatPage() {
     </div>
   );
 
+  const panelTransitionStyle = isAnimating
+    ? { transition: PANEL_TRANSITION }
+    : undefined;
+
   return (
     <ResizablePanelGroup orientation="horizontal" className="fixed inset-0 z-0 h-svh w-full">
-      <ResizablePanel defaultSize={sandbox.isOpen ? 65 : 100} minSize={20}>
+      <ResizablePanel
+        defaultSize={sandbox.isOpen ? 65 : 100}
+        minSize={20}
+        style={panelTransitionStyle}
+      >
         {chatContent}
       </ResizablePanel>
-      {sandbox.isOpen && (
-        <>
-          <ResizableHandle withHandle className="z-10" />
-          <ResizablePanel defaultSize={35} minSize={25}>
-          <ChatSandboxWorkspace
-            sshSession={sandbox.sshSession}
-            explorer={sandbox.explorer}
-            terminalSessions={sandbox.terminalSessions}
-            activeTerminalId={sandbox.activeTerminalId}
-            onRefreshExplorer={() => void sandbox.refreshExplorer()}
-            onNavigateExplorer={(path) => void sandbox.navigateExplorer(path)}
-            onDownloadFile={(path, name) => void sandbox.downloadFile(path, name)}
-            onDownloadFolder={(path, name) => void sandbox.downloadFolder(path, name)}
-            onDeleteEntry={(path) => void sandbox.deleteEntry(path)}
-            onRefreshTerminalSessions={() => void sandbox.refreshTerminalSessions()}
-            onSwitchTerminalSession={sandbox.switchTerminalSession}
-            onCreateTerminalSession={sandbox.createTerminalSession}
-            onCloseTerminalSession={sandbox.closeTerminalSession}
-            previewPort={sandbox.previewPort}
-            previewUrl={sandbox.previewUrl}
-            isConnectingPreview={sandbox.isConnectingPreview}
-            onPreviewPortChange={sandbox.setPreviewPort}
-            onCreatePreviewAccess={sandbox.createPreviewAccess}
-            onOpenInEditor={sandbox.openInEditor}
-            onReconnectTerminal={sandbox.reconnectTerminal}
-            onFocusTerminal={sandbox.focusTerminal}
-            terminalContainerRef={sandbox.terminalContainerRef}
-            terminalBackground={sandbox.terminalBackground}
-          />
-          </ResizablePanel>
-        </>
-      )}
+      <ResizableHandle
+        withHandle
+        className={cn(
+          "z-10 transition-[opacity,width] duration-300",
+          !sandbox.isOpen && "pointer-events-none opacity-0"
+        )}
+      />
+      <ResizablePanel
+        panelRef={sandboxPanelRef}
+        defaultSize={sandbox.isOpen ? 35 : 0}
+        minSize={25}
+        collapsible
+        collapsedSize={0}
+        style={panelTransitionStyle}
+      >
+        <ChatSandboxWorkspace
+          sshSession={sandbox.sshSession}
+          explorer={sandbox.explorer}
+          terminalSessions={sandbox.terminalSessions}
+          activeTerminalId={sandbox.activeTerminalId}
+          onRefreshExplorer={() => void sandbox.refreshExplorer()}
+          onNavigateExplorer={(path) => void sandbox.navigateExplorer(path)}
+          onDownloadFile={(path, name) => void sandbox.downloadFile(path, name)}
+          onDownloadFolder={(path, name) => void sandbox.downloadFolder(path, name)}
+          onDeleteEntry={(path) => void sandbox.deleteEntry(path)}
+          onRefreshTerminalSessions={() => void sandbox.refreshTerminalSessions()}
+          onSwitchTerminalSession={sandbox.switchTerminalSession}
+          onCreateTerminalSession={sandbox.createTerminalSession}
+          onCloseTerminalSession={sandbox.closeTerminalSession}
+          previewPort={sandbox.previewPort}
+          previewUrl={sandbox.previewUrl}
+          isConnectingPreview={sandbox.isConnectingPreview}
+          onPreviewPortChange={sandbox.setPreviewPort}
+          onCreatePreviewAccess={sandbox.createPreviewAccess}
+          onOpenInEditor={sandbox.openInEditor}
+          onReconnectTerminal={sandbox.reconnectTerminal}
+          onFocusTerminal={sandbox.focusTerminal}
+          terminalContainerRef={sandbox.terminalContainerRef}
+          terminalBackground={sandbox.terminalBackground}
+        />
+      </ResizablePanel>
     </ResizablePanelGroup>
   );
 }

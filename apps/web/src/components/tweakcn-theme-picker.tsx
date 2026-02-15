@@ -218,7 +218,7 @@ export function ThemePicker({
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger render={<Button variant="outline" size="sm" className={cn("gap-2", className)} />}><Palette className="h-4 w-4" />{currentTheme ? formatThemeName(currentTheme.name) : "Theme"}</DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" size="sm" className={cn("gap-2", className)} />}><Palette className="h-4 w-4" />{currentTheme ? formatThemeName(currentTheme.name) : "Choose TweakCN Theme"}</DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[280px] p-0">
         {/* Search Input */}
         <div className="p-2 border-b border-border">
