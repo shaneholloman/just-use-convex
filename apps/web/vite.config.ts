@@ -13,7 +13,7 @@ export default defineConfig({
     port: 3001,
   },
   build: {
-    minify: false,
+    minify: true,
     sourcemap: true,
   },
   ssr: {
