@@ -5,13 +5,7 @@ import type { UIMessage } from "@ai-sdk/react";
 import type { ChatAddToolApproveResponseFunction } from "ai";
 import type { FileUIPart } from "ai";
 import { MessageItem } from "./message-items";
-import type { AskUserState, TodosState } from "@/components/chat/types";
-import {
-  useTodosState,
-  useAskUserState,
-  findLastAssistantMessageIndex,
-  findPrecedingUserMessageId,
-} from "@/hooks/use-chat";
+import { findLastAssistantMessageIndex, findPrecedingUserMessageId } from "@/hooks/use-chat";
 import { useHeader } from "@/hooks/use-header";
 
 interface MessageListProps {
@@ -20,8 +14,6 @@ interface MessageListProps {
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
-  onTodosChange?: (todosState: TodosState) => void;
-  onAskUserChange?: (askUserState: AskUserState | null) => void;
 }
 
 export function MessageList({
@@ -30,16 +22,16 @@ export function MessageList({
   toolApprovalResponse,
   onRegenerate,
   onEditMessage,
-  onTodosChange,
-  onAskUserChange,
 }: MessageListProps) {
   const { scrollToBottom } = useStickToBottomContext();
   const prevMessagesLength = useRef(messages.length);
-  const { handleTodosChange, syncTodosToParent } = useTodosState();
-  const { handleAskUserChange, syncAskUserToParent } = useAskUserState();
   const { headerHeight } = useHeader();
 
   const lastAssistantMessageIndex = findLastAssistantMessageIndex(messages);
+  const lastAssistantMessage =
+    lastAssistantMessageIndex >= 0
+      ? messages[lastAssistantMessageIndex]
+      : null;
 
   useEffect(() => {
     if (messages.length > prevMessagesLength.current) {
@@ -47,14 +39,6 @@ export function MessageList({
     }
     prevMessagesLength.current = messages.length;
   }, [messages.length, scrollToBottom]);
-
-  useEffect(() => {
-    syncTodosToParent(onTodosChange);
-  });
-
-  useEffect(() => {
-    syncAskUserToParent(onAskUserChange);
-  });
 
   const messageListPaddingTop = messages.length > 0 ? headerHeight : 0;
 
@@ -76,8 +60,6 @@ export function MessageList({
             onEditMessage={onEditMessage}
             isLastAssistantMessage={index === lastAssistantMessageIndex}
             userMessageId={userMessageId}
-            onTodosChange={index === lastAssistantMessageIndex ? handleTodosChange : undefined}
-            onAskUserChange={index === lastAssistantMessageIndex ? handleAskUserChange : undefined}
           />
         );
       })}

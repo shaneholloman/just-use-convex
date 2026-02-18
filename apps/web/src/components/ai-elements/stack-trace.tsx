@@ -415,7 +415,7 @@ export const StackTraceFrames = memo(
                 ? "text-muted-foreground/50"
                 : "text-foreground/90"
             )}
-            key={`${frame.raw}-${index}`}
+            key={`${frame.raw}-${frame.lineNumber ?? "n/a"}-${frame.columnNumber ?? "n/a"}`}
           >
             <span className="text-muted-foreground">at </span>
             {frame.functionName && (
