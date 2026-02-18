@@ -21,6 +21,7 @@ import {
   findLastAssistantMessageIndex,
   useChat,
 } from "@/hooks/use-chat";
+import { useChat as useConvexChat } from "@/hooks/use-chats";
 import { AskUserDisplay } from "@/components/chat/ask-user-display";
 import { ChatSandboxWorkspace } from "@/components/chat/chat-sandbox-workspace";
 import { useChatSandbox } from "@/hooks/use-sandbox";
@@ -49,6 +50,7 @@ function ChatPage() {
   const { chatId } = Route.useParams();
   const typedChatId = chatId as Id<"chats">;
   const { chat, agent, settings, setSettings, isReady } = useAgentInstance(chatId);
+  const { data: convexChat } = useConvexChat(typedChatId);
   const { groupedModels, models } = useOpenRouterModels();
   const sandbox = useChatSandbox(typedChatId, agent);
   const chatContentRef = useRef<HTMLDivElement>(null);
@@ -231,9 +233,11 @@ function ChatPage() {
         models={models}
         selectedModel={selectedModel}
         hasMessages={messages.length > 0}
-        onSandboxToggle={() => void sandbox.toggle()}
-        isSandboxPanelOpen={sandbox.isOpen}
-        isSandboxConnecting={sandbox.isConnectingSsh}
+        {...(convexChat?.sandboxId && {
+          onSandboxToggle: () => void sandbox.toggle(),
+          isSandboxPanelOpen: sandbox.isOpen,
+          isSandboxConnecting: sandbox.isConnectingSsh,
+        })}
       />
     </div>
   );

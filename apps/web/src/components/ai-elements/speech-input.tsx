@@ -103,7 +103,7 @@ export const SpeechInput = ({
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode, setMode] = useState<SpeechInputMode>(detectSpeechInputMode);
+  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode);
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(
     null
   );

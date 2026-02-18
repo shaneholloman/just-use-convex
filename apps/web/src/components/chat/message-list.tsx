@@ -5,7 +5,7 @@ import type { UIMessage } from "@ai-sdk/react";
 import type { ChatAddToolApproveResponseFunction } from "ai";
 import type { FileUIPart } from "ai";
 import { MessageItem } from "./message-items";
-import { findLastAssistantMessageIndex, findPrecedingUserMessageId } from "@/hooks/use-chat";
+import { findPrecedingUserMessageId } from "@/hooks/use-chat";
 import { useHeader } from "@/hooks/use-header";
 
 interface MessageListProps {
@@ -26,12 +26,6 @@ export function MessageList({
   const { scrollToBottom } = useStickToBottomContext();
   const prevMessagesLength = useRef(messages.length);
   const { headerHeight } = useHeader();
-
-  const lastAssistantMessageIndex = findLastAssistantMessageIndex(messages);
-  const lastAssistantMessage =
-    lastAssistantMessageIndex >= 0
-      ? messages[lastAssistantMessageIndex]
-      : null;
 
   useEffect(() => {
     if (messages.length > prevMessagesLength.current) {
@@ -58,7 +52,6 @@ export function MessageList({
             toolApprovalResponse={toolApprovalResponse}
             onRegenerate={onRegenerate}
             onEditMessage={onEditMessage}
-            isLastAssistantMessage={index === lastAssistantMessageIndex}
             userMessageId={userMessageId}
           />
         );

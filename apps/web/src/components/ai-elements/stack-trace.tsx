@@ -407,7 +407,7 @@ export const StackTraceFrames = memo(
 
     return (
       <div className={cn("space-y-1 p-3", className)} {...props}>
-        {framesToShow.map((frame, index) => (
+        {framesToShow.map((frame) => (
           <div
             className={cn(
               "text-xs",

@@ -37,7 +37,7 @@ export interface MessageItemProps {
   toolApprovalResponse: ChatAddToolApproveResponseFunction;
   onRegenerate?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newText: string, files: FileUIPart[]) => void;
-  isLastAssistantMessage?: boolean;
+  // isLastAssistantMessage?: boolean;
   userMessageId?: string;
 }
 
@@ -76,7 +76,6 @@ export const MessageItem = memo(function MessageItem({
   toolApprovalResponse,
   onRegenerate,
   onEditMessage,
-  isLastAssistantMessage,
   userMessageId,
 }: MessageItemProps) {
   const messageText = extractMessageText(message);
@@ -291,7 +290,6 @@ export const MessageItem = memo(function MessageItem({
   // For completed messages (not streaming), skip re-render if ID matches
   if (!prev.isStreaming && !next.isStreaming) {
     if (prev.message.id !== next.message.id) return false;
-    if (prev.isLastAssistantMessage !== next.isLastAssistantMessage) return false;
     // Same completed message, no need to re-render
     return true;
   }

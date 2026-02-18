@@ -88,7 +88,7 @@ export function ChatModelSelector({
         <ModelSelectorInput placeholder="Search models..." />
         <div className="flex flex-1 min-w-0 overflow-hidden">
             <ModelSelectorSidebar>
-            {authors.map((author, index) => (
+            {authors.map((author) => (
               <ModelSelectorProviderButton
                 key={author}
                 provider={getProviderLogoSlug(author)}
