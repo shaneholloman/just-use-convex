@@ -40,6 +40,7 @@ import type * as tables_chats from "../tables/chats.js";
 import type * as tables_globalAttachments from "../tables/globalAttachments.js";
 import type * as tables_orgMemberAttachments from "../tables/orgMemberAttachments.js";
 import type * as tables_sandboxes from "../tables/sandboxes.js";
+import type * as tables_shared from "../tables/shared.js";
 import type * as tables_todoAssignedMembers from "../tables/todoAssignedMembers.js";
 import type * as tables_todos from "../tables/todos.js";
 import type * as tables_workflowExecutions from "../tables/workflowExecutions.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "tables/globalAttachments": typeof tables_globalAttachments;
   "tables/orgMemberAttachments": typeof tables_orgMemberAttachments;
   "tables/sandboxes": typeof tables_sandboxes;
+  "tables/shared": typeof tables_shared;
   "tables/todoAssignedMembers": typeof tables_todoAssignedMembers;
   "tables/todos": typeof tables_todos;
   "tables/workflowExecutions": typeof tables_workflowExecutions;

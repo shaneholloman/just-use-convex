@@ -3,20 +3,13 @@ import { defineEntFromTable } from "convex-ents";
 import { Table } from "convex-helpers/server";
 import { convexToZodFields, zodToConvexFields } from "convex-helpers/server/zod4";
 import { workflowsWithSystemFields } from "./workflows";
-
-export const executionStatusSchema = z.enum([
-  "pending",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-]);
+import { executionStatusSchema } from "./shared";
 
 export const workflowExecutionsZodSchema = {
   workflowId: workflowsWithSystemFields._id,
   organizationId: z.string(),
   memberId: z.string(),
-  status: executionStatusSchema,
+  status: executionStatusSchema.exclude(["idle"]),
   triggerPayload: z.string().optional(),
   error: z.string().optional(),
   agentOutput: z.string().optional(),
